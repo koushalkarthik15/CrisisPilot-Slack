@@ -1,6 +1,8 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.notifications import NotificationEngine
+from core.services import registry
 from core.state import StateManager
 from features.incident_management.domain import IncidentStatus
 from features.incident_management.schemas import IncidentCreate
@@ -61,8 +63,6 @@ async def test_e2e_operational_workflow(db_session: AsyncSession, state_manager:
     assert profile.current_situation_state in [SituationState.CRITICAL, SituationState.WARNING]
 
     # Verify Notification & Recommendation
-    from core.services import registry
-    from core.notifications import NotificationEngine
     notif_engine = registry.get(NotificationEngine)
     # Use duck-typing: conftest.MockNotificationEngine has notifications_sent
     assert hasattr(notif_engine, "notifications_sent"), "Expected MockNotificationEngine with notifications_sent"
