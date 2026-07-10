@@ -1,0 +1,3 @@
+"""
+Features package (Bounded Contexts).
+"""
