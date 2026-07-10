@@ -1,9 +1,9 @@
 import logging
 from typing import AsyncGenerator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import text
 
 from core.config import get_settings
 
@@ -132,8 +132,7 @@ async def init_db() -> None:
     Initializes the database by creating all defined tables.
     Runs lightweight schema migrations.
     """
-    from sqlalchemy import text
-    
+
     # Import models to ensure they are registered with the declarative Base
     import features.evidence.models  # noqa: F401
     import features.incident_management.models  # noqa: F401
