@@ -1,5 +1,6 @@
 from typing import List, Optional
-from sqlalchemy import select, update, delete
+
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from features.mini_agents.models import MiniAgentModel

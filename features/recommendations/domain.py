@@ -1,6 +1,8 @@
 from enum import Enum
-from pydantic import BaseModel
 from typing import List
+
+from pydantic import BaseModel
+
 
 class RecommendationPriority(str, Enum):
     LOW = "Low"

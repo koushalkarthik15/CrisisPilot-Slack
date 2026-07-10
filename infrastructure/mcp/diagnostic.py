@@ -11,15 +11,15 @@ class EchoTool(BaseTool):
     It returns the system time and echoes back the provided arguments.
     It is not a business capability and should only be used for health checks.
     """
-    
+
     @property
     def name(self) -> str:
         return "diagnostic_echo"
-        
+
     @property
     def description(self) -> str:
         return "Internal framework validation tool. Returns system time and echoes arguments."
-        
+
     @property
     def input_schema(self) -> Dict[str, Any]:
         return {
@@ -36,9 +36,9 @@ class EchoTool(BaseTool):
     async def execute(self, request: ToolRequest) -> ToolResponse:
         message = request.arguments.get("message", "No message provided.")
         current_time = datetime.now(timezone.utc).isoformat()
-        
+
         content = f"Echo: {message} | Server Time: {current_time}"
-        
+
         return ToolResponse(
             is_error=False,
             content=content,

@@ -1,5 +1,6 @@
 from core.errors import CrisisPilotError
 
+
 class MonitoringProfileNotFoundError(CrisisPilotError):
     def __init__(self, profile_id: str):
         super().__init__(f"Monitoring Profile with id '{profile_id}' not found.")

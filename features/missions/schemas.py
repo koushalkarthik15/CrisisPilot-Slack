@@ -1,8 +1,10 @@
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
+
 from pydantic import BaseModel, Field
 
-from features.missions.domain import MissionStatus, ExecutionStrategy, MissionPriority
+from features.missions.domain import ExecutionStrategy, MissionPriority, MissionStatus
+
 
 class MissionBase(BaseModel):
     name: str = Field(..., description="Name of the mission")
@@ -40,6 +42,6 @@ class MissionRead(MissionBase):
     updated_at: datetime
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
-    
+
     class Config:
         from_attributes = True

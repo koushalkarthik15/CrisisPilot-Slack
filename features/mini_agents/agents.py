@@ -1,5 +1,6 @@
 import logging
 import re
+
 from core.orchestration.base import BaseMiniAgent
 from core.orchestration.models import AgentRequest, AgentResponse, ToolInvocation
 from core.services import registry as service_registry
@@ -24,7 +25,7 @@ class WeatherMiniAgent(BaseMiniAgent):
 
     async def execute(self, request: AgentRequest) -> AgentResponse:
         logger.info(f"[{self.name}] Executing task with prompt: '{request.prompt}'")
-        
+
         # Validate allowed tools
         if "weather_tool" not in request.available_tools:
             logger.error("Configuration error: 'weather_tool' is not allowed for this agent.")
@@ -37,7 +38,7 @@ class WeatherMiniAgent(BaseMiniAgent):
         # e.g., "Weather in Seattle" -> "Seattle"
         match = re.search(r'(?i)weather in\s+([a-zA-Z\s,]+)', request.prompt)
         location = match.group(1).strip() if match else request.prompt.strip()
-        
+
         logger.debug(f"[{self.name}] Extracted location: {location}")
 
         # Fetch MCPExecutor from the registry
@@ -55,7 +56,7 @@ class WeatherMiniAgent(BaseMiniAgent):
             name="weather_tool",
             arguments={"location": location}
         )
-        
+
         tool_invocations = [ToolInvocation(tool_name="weather_tool", arguments={"location": location})]
 
         logger.debug(f"[{self.name}] Invoking MCP tool '{tool_req.name}'")

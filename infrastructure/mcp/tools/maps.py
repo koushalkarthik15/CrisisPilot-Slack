@@ -1,7 +1,9 @@
 import logging
-import aiohttp
 from abc import ABC, abstractmethod
 from typing import Any, Dict
+
+import aiohttp
+
 from infrastructure.mcp.base import BaseTool
 from infrastructure.mcp.models import ToolRequest, ToolResponse
 
@@ -47,11 +49,11 @@ class MapsTool(BaseTool):
     @property
     def name(self) -> str:
         return "maps_tool"
-        
+
     @property
     def description(self) -> str:
         return "Provides geographic coordinates (latitude and longitude) and standardized names for a given location."
-        
+
     @property
     def input_schema(self) -> Dict[str, Any]:
         return {
@@ -69,24 +71,24 @@ class MapsTool(BaseTool):
         location = request.arguments.get("location")
         if not location:
             return ToolResponse(is_error=True, content="Missing required argument: 'location'.")
-            
+
         try:
             data = await self.provider.geocode(location)
-            
+
             if not data:
                 return ToolResponse(is_error=False, content=f"Location '{location}' not found.")
-                
+
             display_name = data.get("display_name", "Unknown")
             lat = data.get("lat", "0")
             lon = data.get("lon", "0")
-            
+
             content = (
                 f"Geocoding result for '{location}':\n"
                 f"- Standard Name: {display_name}\n"
                 f"- Latitude: {lat}\n"
                 f"- Longitude: {lon}"
             )
-            
+
             return ToolResponse(
                 is_error=False,
                 content=content,

@@ -1,12 +1,13 @@
 from typing import Optional
 
+
 def build_quick_actions(entity_id: str, entity_type: str, operation_id: Optional[str] = None) -> dict:
     """
     Builds context-appropriate quick actions.
     entity_type: 'operation', 'mission', 'workflow', 'incident'
     """
     elements = []
-    
+
     # Common actions for all entities
     elements.append({
         "type": "button",
@@ -14,14 +15,14 @@ def build_quick_actions(entity_id: str, entity_type: str, operation_id: Optional
         "value": f"{entity_type}_{entity_id}",
         "action_id": "global_view_timeline"
     })
-    
+
     elements.append({
         "type": "button",
         "text": {"type": "plain_text", "text": "View Evidence 📁", "emoji": True},
         "value": f"{entity_type}_{entity_id}",
         "action_id": "global_view_evidence"
     })
-    
+
     if entity_type == "operation":
         elements.append({
             "type": "button",
@@ -46,7 +47,7 @@ def build_quick_actions(entity_id: str, entity_type: str, operation_id: Optional
             "action_id": "workflow_advance",
             "style": "primary"
         })
-        
+
     return {
         "type": "actions",
         "elements": elements

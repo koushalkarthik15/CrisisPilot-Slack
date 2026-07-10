@@ -1,8 +1,10 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
 
-from features.incident_management.domain import IncidentStatus, IncidentSeverity
+from pydantic import BaseModel
+
+from features.incident_management.domain import IncidentSeverity, IncidentStatus
+
 
 class IncidentCreate(BaseModel):
     title: str

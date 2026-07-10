@@ -1,5 +1,6 @@
 import logging
 from typing import List, Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -10,7 +11,7 @@ logger = logging.getLogger("crisispilot.evidence.repository")
 
 class EvidenceRepository:
     """Persistence layer for Evidence."""
-    
+
     async def create(self, db: AsyncSession, evidence_in: EvidenceCreate, submitted_by: str) -> Evidence:
         evidence = Evidence(
             title=evidence_in.title,
@@ -41,14 +42,14 @@ class EvidenceRepository:
         evidence = await self.get(db, evidence_id)
         if not evidence:
             return None
-            
+
         update_dict = update_data.model_dump(exclude_unset=True)
         if not update_dict:
             return evidence
-            
+
         for key, value in update_dict.items():
             setattr(evidence, key, value)
-            
+
         await db.flush()
         await db.refresh(evidence)
         logger.info(f"Updated evidence {evidence.id}")
@@ -60,21 +61,21 @@ class EvidenceRepository:
             .order_by(Evidence.created_at.desc())
         )
         return list(result.scalars().all())
-        
+
     async def list_by_incident(self, db: AsyncSession, incident_id: str) -> List[Evidence]:
         result = await db.execute(
             select(Evidence).where(Evidence.incident_id == incident_id)
             .order_by(Evidence.created_at.desc())
         )
         return list(result.scalars().all())
-        
+
     async def list_by_mission(self, db: AsyncSession, mission_id: str) -> List[Evidence]:
         result = await db.execute(
             select(Evidence).where(Evidence.mission_id == mission_id)
             .order_by(Evidence.created_at.desc())
         )
         return list(result.scalars().all())
-        
+
     async def list_by_workflow(self, db: AsyncSession, workflow_id: str) -> List[Evidence]:
         result = await db.execute(
             select(Evidence).where(Evidence.workflow_id == workflow_id)

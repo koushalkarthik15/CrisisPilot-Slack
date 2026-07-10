@@ -13,7 +13,7 @@ class MockSlackClient:
         }
         self.messages_sent.append(message)
         return {"ok": True, "ts": "mock-12345.678"}
-        
+
     async def views_open(self, trigger_id, view, **kwargs):
         self.views_opened.append({
             "trigger_id": trigger_id,

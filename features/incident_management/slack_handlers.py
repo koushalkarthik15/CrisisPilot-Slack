@@ -3,19 +3,17 @@ import logging
 from slack_bolt.async_app import AsyncApp
 from slack_sdk.errors import SlackApiError
 
-from core.services import registry as service_registry
 from core.notifications import NotificationEngine
-from infrastructure.database import get_db_session
-
-from features.incident_management.schemas import IncidentCreate
+from core.services import registry as service_registry
 from features.incident_management.domain import IncidentSeverity
-from features.incident_management.service import IncidentService
 from features.incident_management.repository import IncidentRepository
-
-from features.recommendations.service import RecommendationService
-from features.recommendations.repository import RecommendationRepository
+from features.incident_management.schemas import IncidentCreate
+from features.incident_management.service import IncidentService
 from features.recommendations.intelligence import IncidentIntelligenceService
+from features.recommendations.repository import RecommendationRepository
 from features.recommendations.router import RecommendationRouter
+from features.recommendations.service import RecommendationService
+from infrastructure.database import get_db_session
 
 logger = logging.getLogger("crisispilot.incident_management.slack_handlers")
 
@@ -80,7 +78,7 @@ def register_incident_handlers(app: AsyncApp) -> None:
     async def handle_declare_incident_submission(ack, body, view, logger):
         values = view["state"]["values"]
         channel_id = view["private_metadata"]
-        
+
         title = values["title_block"]["title_input"]["value"]
         severity_str = values["severity_block"]["severity_input"]["selected_option"]["value"]
         desc = values["desc_block"]["desc_input"]["value"]
@@ -89,7 +87,7 @@ def register_incident_handlers(app: AsyncApp) -> None:
             # Inject Services
             session_gen = get_db_session()
             session = await anext(session_gen)
-            
+
             incident_service = IncidentService(repository=IncidentRepository())
             intelligence_svc = service_registry.get(IncidentIntelligenceService)
             router = service_registry.get(RecommendationRouter)
@@ -99,7 +97,7 @@ def register_incident_handlers(app: AsyncApp) -> None:
                 router=router
             )
             notification_engine = service_registry.get(NotificationEngine)
-            
+
             # 1. Create Incident
             create_data = IncidentCreate(
                 title=title,
@@ -111,16 +109,16 @@ def register_incident_handlers(app: AsyncApp) -> None:
             incident = await incident_service.create_incident(session, create_data)
             await session.commit()
             await session.refresh(incident)
-            
+
             await ack()
 
             # 2. Publish to Slack
             thread_ts = await notification_engine.publish_incident_created(incident, channel_id)
-            
+
             from core.state import StateManager
             state_manager = service_registry.get(StateManager)
             await state_manager.update_incident_thread_ts(session, incident.id, thread_ts)
-            
+
             # 3. Simulate automatic recommendations to populate the thread
             incident_context = {
                 "id": incident.id,
@@ -130,12 +128,12 @@ def register_incident_handlers(app: AsyncApp) -> None:
             }
             recs = await recommendation_service.generate_recommendations(session, incident_context, [])
             await session.commit()
-            
+
             for rec in recs:
                 await notification_engine.publish_recommendation(rec, channel_id, thread_ts)
 
             await session.close()
-            
+
         except Exception as e:
             await ack()
             logger.error(f"Unexpected error in declare_incident: {e}", exc_info=True)
@@ -144,22 +142,23 @@ def register_incident_handlers(app: AsyncApp) -> None:
     async def list_incidents_command(ack, body, client):
         await ack()
         channel_id = body.get("channel_id")
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
             incident_service = IncidentService(repository=IncidentRepository())
-            
+
             # For MVP, get all incidents
             from sqlalchemy.future import select
+
             from features.incident_management.models import Incident
             result = await session.execute(select(Incident).order_by(Incident.created_at.desc()).limit(10))
             incidents = result.scalars().all()
-            
+
             if not incidents:
                 await client.chat_postMessage(channel=channel_id, text="No incidents found.")
                 return
-                
+
             blocks = [{"type": "header", "text": {"type": "plain_text", "text": "Recent Incidents"}}]
             for inc in incidents:
                 assignee_text = f"Assigned to <@{inc.assigned_user_id}>" if inc.assigned_user_id else "Unassigned"
@@ -170,20 +169,20 @@ def register_incident_handlers(app: AsyncApp) -> None:
                         "text": f"*{inc.title}*\nID: `{inc.id}` | Status: {inc.status.name} | Severity: {inc.severity.name}\n{assignee_text} | Created: {inc.created_at.strftime('%Y-%m-%d %H:%M UTC')}"
                     }
                 })
-                
+
                 if inc.thread_ts:
                     try:
                         permalink_res = await client.chat_getPermalink(channel=inc.channel_id, message_ts=inc.thread_ts)
                         link = permalink_res.get("permalink")
                     except Exception:
                         link = f"https://slack.com/app_redirect?channel={inc.channel_id}&message_ts={inc.thread_ts}"
-                        
+
                     blocks.append({
                         "type": "context",
                         "elements": [{"type": "mrkdwn", "text": f"<{link}|View Incident Thread 🧵>"}]
                     })
-                    
-                
+
+
                 actions = []
                 if inc.status.name not in ["RESOLVED", "ARCHIVED"]:
                     actions.extend([
@@ -207,7 +206,7 @@ def register_incident_handlers(app: AsyncApp) -> None:
                             "action_id": "incident_archive"
                         }
                     ])
-                    
+
                 actions.extend([
                     {
                         "type": "button",
@@ -222,7 +221,7 @@ def register_incident_handlers(app: AsyncApp) -> None:
                         "action_id": "incident_view_evidence"
                     }
                 ])
-                
+
                 actions.append({
                     "type": "overflow",
                     "options": [
@@ -249,12 +248,12 @@ def register_incident_handlers(app: AsyncApp) -> None:
                     ],
                     "action_id": "incident_more_actions"
                 })
-                
+
                 blocks.append({
                     "type": "actions",
                     "elements": actions
                 })
-            
+
             await client.chat_postMessage(channel=channel_id, text="Incidents List", blocks=blocks)
             await session.close()
         except Exception as e:
@@ -281,27 +280,28 @@ def register_incident_handlers(app: AsyncApp) -> None:
             elif selected.startswith("linkmiss_"):
                 incident_id = selected.replace("linkmiss_", "")
                 action_type = "link_mission"
-        
+
         user_id = body["user"]["id"]
         channel_id = body["channel"]["id"]
         message_ts = body["message"]["ts"]
-        
+
         if action_type in ["link_operation", "link_mission"]:
             try:
                 session_gen = get_db_session()
                 session = await anext(session_gen)
-                
+
                 if action_type == "link_operation":
-                    from features.operations.models import Operation
                     from sqlalchemy.future import select
+
                     from features.operations.domain import OperationStatus
+                    from features.operations.models import Operation
                     result = await session.execute(select(Operation).filter(Operation.status == OperationStatus.ACTIVE))
                     operations = result.scalars().all()
-                    
+
                     options = [{"text": {"type": "plain_text", "text": op.name[:75]}, "value": op.id} for op in operations]
                     if not options:
                         options = [{"text": {"type": "plain_text", "text": "No active operations found"}, "value": "none"}]
-                        
+
                     await client.views_open(
                         trigger_id=body["trigger_id"],
                         view={
@@ -327,25 +327,26 @@ def register_incident_handlers(app: AsyncApp) -> None:
                         }
                     )
                 else:
-                    from features.missions.models import Mission
                     from sqlalchemy.future import select
+
                     from features.missions.domain import MissionStatus
+                    from features.missions.models import Mission
                     result = await session.execute(
                         select(Mission).filter(
                             Mission.status.in_([
-                                MissionStatus.CREATED, 
-                                MissionStatus.SCHEDULED, 
-                                MissionStatus.RUNNING, 
+                                MissionStatus.CREATED,
+                                MissionStatus.SCHEDULED,
+                                MissionStatus.RUNNING,
                                 MissionStatus.PAUSED
                             ])
                         )
                     )
                     missions = result.scalars().all()
-                    
+
                     options = [{"text": {"type": "plain_text", "text": m.name[:75]}, "value": m.id} for m in missions]
                     if not options:
                         options = [{"text": {"type": "plain_text", "text": "No active missions found"}, "value": "none"}]
-                        
+
                     await client.views_open(
                         trigger_id=body["trigger_id"],
                         view={
@@ -374,15 +375,15 @@ def register_incident_handlers(app: AsyncApp) -> None:
             except Exception as e:
                 logger.error(f"Error opening link modal: {e}", exc_info=True)
             return
-        
+
         from core.state import StateManager
         state_manager = StateManager()
         await state_manager.initialize()
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
-            
+
             if action_type == "archive":
                 await state_manager.archive_incident(session, incident_id, user_id)
                 text = f"🗄️ Incident archived by <@{user_id}>"
@@ -398,10 +399,10 @@ def register_incident_handlers(app: AsyncApp) -> None:
                 text = f"🗑️ Incident deleted by <@{user_id}>"
             else:
                 text = f"Action {action_type} performed by <@{user_id}>"
-                
+
             await session.commit()
             await session.close()
-            
+
             # Post thread update
             await client.chat_postMessage(
                 channel=channel_id,
@@ -417,7 +418,7 @@ def register_incident_handlers(app: AsyncApp) -> None:
         incident_id = body["actions"][0]["value"]
         channel_id = body["channel"]["id"]
         message_ts = body["message"]["ts"]
-        
+
         try:
             await client.views_open(
                 trigger_id=body["trigger_id"],
@@ -444,7 +445,7 @@ def register_incident_handlers(app: AsyncApp) -> None:
             )
         except Exception as e:
             logger.error(f"Error opening resolve incident modal: {e}", exc_info=True)
-            
+
     @app.view("resolve_incident_modal")
     async def handle_resolve_incident_submission(ack, body, view, client):
         values = view["state"]["values"]
@@ -453,22 +454,22 @@ def register_incident_handlers(app: AsyncApp) -> None:
         channel_id = meta[1]
         message_ts = meta[2]
         notes = values["notes_block"]["notes_input"]["value"]
-        
+
         await ack()
-        
+
         user_id = body["user"]["id"]
-        
+
         from core.state import StateManager
         state_manager = service_registry.get(StateManager)
         notification_engine = service_registry.get(NotificationEngine)
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
-            
+
             incident = await state_manager.resolve_incident(session, incident_id, user_id, comments=notes)
             await session.commit()
-            
+
             # Also update the original incident message to remove the action buttons
             if incident and incident.thread_ts:
                 updated_blocks = notification_engine.build_incident_card_blocks(incident)
@@ -481,14 +482,14 @@ def register_incident_handlers(app: AsyncApp) -> None:
                     )
                 except Exception as e:
                     logger.error(f"Failed to update original incident message: {e}")
-                    
+
             # Post thread update where they clicked it
             await notification_engine.dispatch_threaded_message(
                 channel_id=channel_id,
                 thread_ts=message_ts,
                 text=f"✅ Incident resolved by <@{user_id}>\n*Notes:* {notes}"
             )
-            
+
             # Post to main thread if different
             if incident and incident.thread_ts and incident.thread_ts != message_ts:
                 await notification_engine.dispatch_threaded_message(
@@ -496,7 +497,7 @@ def register_incident_handlers(app: AsyncApp) -> None:
                     thread_ts=incident.thread_ts,
                     text=f"✅ Incident resolved by <@{user_id}>\n*Notes:* {notes}"
                 )
-                
+
             await session.close()
         except Exception as e:
             logger.error(f"Error handling resolve incident submission: {e}", exc_info=True)
@@ -511,7 +512,7 @@ def register_incident_handlers(app: AsyncApp) -> None:
         incident_id = body["actions"][0]["value"]
         channel_id = body["channel"]["id"]
         message_ts = body["message"]["ts"]
-        
+
         try:
             await client.views_open(
                 trigger_id=body["trigger_id"],
@@ -538,7 +539,7 @@ def register_incident_handlers(app: AsyncApp) -> None:
             )
         except Exception as e:
             logger.error(f"Error opening assign incident modal: {e}", exc_info=True)
-            
+
     @app.view("assign_incident_modal")
     async def handle_assign_incident_submission(ack, body, view, client):
         values = view["state"]["values"]
@@ -547,25 +548,25 @@ def register_incident_handlers(app: AsyncApp) -> None:
         channel_id = meta[1]
         message_ts = meta[2]
         assignee_ids = values["assignee_block"]["assignee_input"]["selected_users"]
-        
+
         await ack()
-        
+
         user_id = body["user"]["id"]
-        
+
         from core.state import StateManager
         state_manager = service_registry.get(StateManager)
         notification_engine = service_registry.get(NotificationEngine)
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
-            
+
             # Store comma separated users in db
             assigned_str = ",".join(assignee_ids)
             updated_incident = await state_manager.assign_incident(session, incident_id, user_id, assigned_str)
-            
+
             await session.commit()
-            
+
             assignee_text = ", ".join([f"<@{uid}>" for uid in assignee_ids])
             # Post thread update
             await notification_engine.dispatch_threaded_message(
@@ -573,7 +574,7 @@ def register_incident_handlers(app: AsyncApp) -> None:
                 thread_ts=message_ts,
                 text=f"👤 Incident assigned to {assignee_text} by <@{user_id}>"
             )
-            
+
             # Send DM to each Assignee
             if updated_incident:
                 link_text = ""
@@ -584,7 +585,7 @@ def register_incident_handlers(app: AsyncApp) -> None:
                     except Exception:
                         link = f"https://slack.com/app_redirect?channel={updated_incident.channel_id}&message_ts={updated_incident.thread_ts}"
                     link_text = f" | <{link}|View Incident Thread 🧵>"
-                    
+
                 for uid in assignee_ids:
                     blocks = [
                         {
@@ -614,7 +615,7 @@ def register_incident_handlers(app: AsyncApp) -> None:
                         }
                     ]
                     await notification_engine.dispatch_direct_message(uid, "You have been assigned to an incident.", blocks)
-                        
+
             await session.close()
         except Exception as e:
             logger.error(f"Error handling assign incident submission: {e}", exc_info=True)
@@ -626,22 +627,22 @@ def register_incident_handlers(app: AsyncApp) -> None:
         user_id = body["user"]["id"]
         channel_id = body["channel"]["id"]
         message_ts = body["message"]["ts"]
-        
+
         from core.state import StateManager
-        from features.workflow.domain import DecisionAction
         from features.incident_management.domain import IncidentStatus
+        from features.workflow.domain import DecisionAction
         state_manager = service_registry.get(StateManager)
         notification_engine = service_registry.get(NotificationEngine)
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
-            
+
             await state_manager.transition_incident_status(
                 session, incident_id, IncidentStatus.IN_PROGRESS, user_id, DecisionAction.START_EXECUTION, comments="Started execution from DM"
             )
             await session.commit()
-            
+
             original_blocks = body["message"].get("blocks", [])
             new_blocks = []
             for block in original_blocks:
@@ -663,14 +664,14 @@ def register_incident_handlers(app: AsyncApp) -> None:
                     })
                 else:
                     new_blocks.append(block)
-                    
+
             await notification_engine.update_message(
                 channel_id=channel_id,
                 ts=message_ts,
                 text="Execution Started",
                 blocks=new_blocks
             )
-            
+
             # Post to main thread if it exists
             incident = await state_manager.incident_service.get_incident(session, incident_id)
             if incident and incident.thread_ts and incident.thread_ts != message_ts:
@@ -679,9 +680,9 @@ def register_incident_handlers(app: AsyncApp) -> None:
                     thread_ts=incident.thread_ts,
                     text=f"▶️ Execution Started by <@{user_id}>"
                 )
-                
+
             await session.close()
-            
+
         except Exception as e:
             logger.error(f"Error starting incident execution: {e}", exc_info=True)
 
@@ -693,40 +694,41 @@ def register_incident_handlers(app: AsyncApp) -> None:
         channel_id = meta[1]
         message_ts = meta[2]
         operation_id = values["operation_block"]["operation_input"]["selected_option"]["value"]
-        
+
         await ack()
         if operation_id == "none":
             return
-            
+
         user_id = body["user"]["id"]
         from core.state import StateManager
         state_manager = service_registry.get(StateManager)
         notification_engine = service_registry.get(NotificationEngine)
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
-            
+
             # Update incident
             incident = await state_manager.incident_service.get_incident(session, incident_id)
             if incident:
                 incident.operation_id = operation_id
                 await session.commit()
-                
+
                 # Fetch operation name
-                from features.operations.models import Operation
                 from sqlalchemy.future import select
+
+                from features.operations.models import Operation
                 op = await session.execute(select(Operation).filter(Operation.id == operation_id))
                 operation = op.scalars().first()
                 op_name = operation.name if operation else operation_id
-                
+
                 msg = f"🔗 Incident linked to Operation: *{op_name}* by <@{user_id}>"
                 await notification_engine.dispatch_threaded_message(
                     channel_id=channel_id,
                     thread_ts=message_ts,
                     text=msg
                 )
-                
+
                 if incident.thread_ts and incident.thread_ts != message_ts:
                     await notification_engine.dispatch_threaded_message(
                         channel_id=incident.channel_id,
@@ -745,38 +747,39 @@ def register_incident_handlers(app: AsyncApp) -> None:
         channel_id = meta[1]
         message_ts = meta[2]
         mission_id = values["mission_block"]["mission_input"]["selected_option"]["value"]
-        
+
         await ack()
         if mission_id == "none":
             return
-            
+
         user_id = body["user"]["id"]
         from core.state import StateManager
         state_manager = service_registry.get(StateManager)
         notification_engine = service_registry.get(NotificationEngine)
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
-            
+
             incident = await state_manager.incident_service.get_incident(session, incident_id)
             if incident:
                 incident.mission_id = mission_id
                 await session.commit()
-                
-                from features.missions.models import Mission
+
                 from sqlalchemy.future import select
+
+                from features.missions.models import Mission
                 m = await session.execute(select(Mission).filter(Mission.id == mission_id))
                 mission = m.scalars().first()
                 m_name = mission.name if mission else mission_id
-                
+
                 msg = f"🎯 Incident linked to Mission: *{m_name}* by <@{user_id}>"
                 await notification_engine.dispatch_threaded_message(
                     channel_id=channel_id,
                     thread_ts=message_ts,
                     text=msg
                 )
-                
+
                 if incident.thread_ts and incident.thread_ts != message_ts:
                     await notification_engine.dispatch_threaded_message(
                         channel_id=incident.channel_id,
@@ -790,20 +793,21 @@ def register_incident_handlers(app: AsyncApp) -> None:
     @app.action("incident_more_actions")
     async def handle_incident_more_actions(ack, body, client):
         await _handle_incident_action(ack, body, client, "overflow")
-        
+
     @app.action("incident_view_timeline")
     async def handle_incident_view_timeline(ack, body, client):
         await ack()
         incident_id = body["actions"][0]["value"]
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
-            
+
             from core.state import StateManager
             state_manager = service_registry.get(StateManager)
-            
+
             from sqlalchemy.future import select
+
             from features.timeline.models import TimelineEvent
             result = await session.execute(
                 select(TimelineEvent)
@@ -811,10 +815,12 @@ def register_incident_handlers(app: AsyncApp) -> None:
                 .order_by(TimelineEvent.created_at.desc())
             )
             events = list(result.scalars().all())
-            
-            from infrastructure.slack_blocks.timeline_blocks import build_timeline_blocks
+
+            from infrastructure.slack_blocks.timeline_blocks import (
+                build_timeline_blocks,
+            )
             blocks = build_timeline_blocks(f"Incident: {incident_id}", events)
-            
+
             await client.views_open(
                 trigger_id=body["trigger_id"],
                 view={
@@ -827,17 +833,18 @@ def register_incident_handlers(app: AsyncApp) -> None:
             await session.close()
         except Exception as e:
             logger.error(f"Error viewing incident timeline: {e}", exc_info=True)
-            
+
     @app.action("incident_view_evidence")
     async def handle_incident_view_evidence(ack, body, client):
         await ack()
         incident_id = body["actions"][0]["value"]
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
-            
+
             from sqlalchemy.future import select
+
             from features.evidence.models import Evidence
             result = await session.execute(
                 select(Evidence)
@@ -845,10 +852,12 @@ def register_incident_handlers(app: AsyncApp) -> None:
                 .order_by(Evidence.created_at.desc())
             )
             evidence_list = list(result.scalars().all())
-            
-            from infrastructure.slack_blocks.evidence_blocks import build_evidence_list_blocks
+
+            from infrastructure.slack_blocks.evidence_blocks import (
+                build_evidence_list_blocks,
+            )
             blocks = build_evidence_list_blocks(f"Incident: {incident_id}", evidence_list)
-            
+
             await client.views_open(
                 trigger_id=body["trigger_id"],
                 view={

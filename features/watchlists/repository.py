@@ -1,10 +1,17 @@
-from typing import List, Optional
+from typing import List
+
+from sqlalchemy import and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import and_
-from shared.repository import BaseRepository
+
 from features.watchlists.models import Watchlist, WatchlistArticle
-from features.watchlists.schemas import WatchlistCreate, WatchlistUpdate, WatchlistArticleCreate
+from features.watchlists.schemas import (
+    WatchlistArticleCreate,
+    WatchlistCreate,
+    WatchlistUpdate,
+)
+from shared.repository import BaseRepository
+
 
 class WatchlistRepository(BaseRepository[Watchlist, WatchlistCreate, WatchlistUpdate]):
     def __init__(self):

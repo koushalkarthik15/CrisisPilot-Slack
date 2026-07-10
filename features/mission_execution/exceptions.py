@@ -1,5 +1,6 @@
 from core.errors import CrisisPilotError
 
+
 class MissionExecutionError(CrisisPilotError):
     """Raised when mission execution fails generally."""
     pass

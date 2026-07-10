@@ -1,17 +1,18 @@
 import logging
 from typing import List, Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
+from features.workflows.domain import WorkflowStatus
 from features.workflows.models import Workflow
 from features.workflows.schemas import WorkflowCreate, WorkflowUpdate
-from features.workflows.domain import WorkflowStatus
 
 logger = logging.getLogger("crisispilot.workflows.repository")
 
 class WorkflowRepository:
     """Persistence layer for Workflows."""
-    
+
     async def create(self, db: AsyncSession, workflow_in: WorkflowCreate, created_by: str) -> Workflow:
         workflow = Workflow(
             name=workflow_in.name,
@@ -41,7 +42,7 @@ class WorkflowRepository:
             .order_by(Workflow.created_at.desc())
         )
         return list(result.scalars().all())
-        
+
     async def list_by_incident(self, db: AsyncSession, incident_id: str) -> List[Workflow]:
         result = await db.execute(
             select(Workflow).where(Workflow.incident_id == incident_id)
@@ -53,14 +54,14 @@ class WorkflowRepository:
         workflow = await self.get(db, workflow_id)
         if not workflow:
             return None
-            
+
         update_dict = update_data.model_dump(exclude_unset=True)
         if not update_dict:
             return workflow
-            
+
         for key, value in update_dict.items():
             setattr(workflow, key, value)
-            
+
         await db.flush()
         await db.refresh(workflow)
         logger.info(f"Updated workflow {workflow_id}")
@@ -70,11 +71,11 @@ class WorkflowRepository:
         workflow = await self.get(db, workflow_id)
         if not workflow:
             return None
-            
+
         workflow.status = new_status
         for key, value in kwargs.items():
             setattr(workflow, key, value)
-            
+
         await db.flush()
         await db.refresh(workflow)
         logger.info(f"Updated status for workflow {workflow_id} to {new_status}")
@@ -84,7 +85,7 @@ class WorkflowRepository:
         workflow = await self.get(db, workflow_id)
         if not workflow:
             return None
-            
+
         workflow.current_stage_index = new_index
         await db.flush()
         await db.refresh(workflow)

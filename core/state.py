@@ -3,27 +3,49 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.errors import StateError
-from features.incident_management import IncidentService, IncidentRepository, IncidentCreate, IncidentUpdate, IncidentStatus
-from features.recommendations import RecommendationService, RecommendationRepository, RecommendationUpdateStatus
+from core.notifications import NotificationEngine
+from core.services import registry as service_registry
+from features.evidence import EvidenceCreate, EvidenceService, EvidenceUpdate
+from features.incident_management import (
+    IncidentCreate,
+    IncidentRepository,
+    IncidentService,
+    IncidentStatus,
+    IncidentUpdate,
+)
+from features.mission_execution import MissionExecutionEngine, MissionScheduler
+from features.missions import (
+    MissionAssignment,
+    MissionCreate,
+    MissionService,
+    MissionStatus,
+    MissionUpdate,
+)
+from features.monitoring.service import MonitoringService
+from features.operations import (
+    OperationCreate,
+    OperationService,
+    OperationStatus,
+    OperationUpdate,
+)
+from features.recommendations import (
+    RecommendationRepository,
+    RecommendationService,
+)
 from features.recommendations.intelligence import IncidentIntelligenceService
 from features.recommendations.router import RecommendationRouter
-from features.workflow.domain import DecisionAction
-from features.workflow import WorkflowService, AuditRepository, DecisionRequest
-from features.operations import OperationService, OperationCreate, OperationUpdate, OperationStatus
-from features.missions import MissionService, MissionCreate, MissionUpdate, MissionStatus, MissionAssignment
-from features.workflows import (
-    WorkflowService as OperationalWorkflowService,
-    WorkflowCreate as OperationalWorkflowCreate,
-    WorkflowUpdate as OperationalWorkflowUpdate,
-    WorkflowStatus as OperationalWorkflowStatus
+from features.timeline import TimelineEventCreate, TimelineService
+from features.timeline.domain import (
+    TimelineEventSeverity,
+    TimelineEventSource,
+    TimelineEventType,
 )
-from features.timeline import TimelineService, TimelineEventCreate
-from features.timeline.domain import TimelineEventType, TimelineEventSource, TimelineEventSeverity
-from features.evidence import EvidenceService, EvidenceCreate, EvidenceUpdate
-from features.monitoring.service import MonitoringService
-from features.mission_execution import MissionExecutionEngine, MissionScheduler
-from core.services import registry as service_registry
-from core.notifications import NotificationEngine
+from features.workflow import AuditRepository, DecisionRequest, WorkflowService
+from features.workflow.domain import DecisionAction
+from features.workflows import WorkflowCreate as OperationalWorkflowCreate
+from features.workflows import WorkflowService as OperationalWorkflowService
+from features.workflows import WorkflowStatus as OperationalWorkflowStatus
+from features.workflows import WorkflowUpdate as OperationalWorkflowUpdate
 
 logger = logging.getLogger("crisispilot.state")
 
@@ -36,10 +58,10 @@ class StateManager:
     def __init__(self):
         # In future sprints, repositories for agents, etc. will be injected here.
         self.incident_service = IncidentService(repository=IncidentRepository())
-        
+
         intelligence_svc = service_registry.get(IncidentIntelligenceService)
         router = service_registry.get(RecommendationRouter)
-        
+
         self.recommendation_service = RecommendationService(
             repository=RecommendationRepository(),
             intelligence_service=intelligence_svc,
@@ -108,7 +130,7 @@ class StateManager:
         if action:
             await self.workflow_service.log_incident_action(db, incident_id, user_id, action, previous, new_status.value, comments)
         return updated
-        
+
     async def resolve_incident(self, db: AsyncSession, incident_id: str, user_id: str, comments: str = None):
         if not self._initialized:
             raise StateError("State Manager is not initialized.")
@@ -116,7 +138,7 @@ class StateManager:
         if incident and incident.status == IncidentStatus.RESOLVED:
             # If already resolved, auto-archive it instead of throwing transition error
             return await self.transition_incident_status(db, incident_id, IncidentStatus.ARCHIVED, user_id, DecisionAction.ARCHIVE_INCIDENT, comments="Auto-archived from resolve button")
-            
+
         return await self.transition_incident_status(db, incident_id, IncidentStatus.RESOLVED, user_id, DecisionAction.RESOLVE_INCIDENT, comments=comments)
 
     async def archive_incident(self, db: AsyncSession, incident_id: str, user_id: str):
@@ -142,7 +164,7 @@ class StateManager:
         updated = await self.incident_service.assign(db, incident_id, assignee_id)
         await self.workflow_service.log_incident_action(db, incident_id, user_id, DecisionAction.ASSIGN, incident.status.value, incident.status.value, f"Assigned to {assignee_id}")
         return updated
-        
+
     async def update_incident_thread_ts(self, db: AsyncSession, incident_id: str, thread_ts: str):
         if not self._initialized:
             raise StateError("State Manager is not initialized.")
@@ -166,7 +188,7 @@ class StateManager:
         """
         if not self._initialized:
             raise StateError("State Manager is not initialized.")
-        
+
         return {
             "resource": resource_type,
             "location": location,
@@ -238,7 +260,7 @@ class StateManager:
         if not self._initialized:
             raise StateError("State Manager is not initialized.")
         mission = await self.mission_service.create_mission(db, mission_in, user_id)
-        
+
         await self.create_timeline_event(db, TimelineEventCreate(
             event_type=TimelineEventType.LIFECYCLE_CHANGE,
             description=f"Mission '{mission.name}' created by user <@{user_id}>",
@@ -247,7 +269,7 @@ class StateManager:
             mission_id=mission.id,
             operation_id=mission.operation_id
         ))
-        
+
         return mission
 
     async def get_mission(self, db: AsyncSession, mission_id: str):
@@ -264,29 +286,29 @@ class StateManager:
         if not self._initialized:
             raise StateError("State Manager is not initialized.")
         mission = await self.mission_service.transition_status(db, mission_id, new_status)
-        
+
         # Auto-resolve incident if mission completes
         if new_status in [MissionStatus.COMPLETED]:
             incidents = await self.incident_service.repository.get_by_mission_id(db, mission_id)
             for incident in incidents:
                 if incident.status not in [IncidentStatus.RESOLVED, IncidentStatus.ARCHIVED]:
                     await self.resolve_incident(db, incident.id, user_id="system", comments=f"Auto-resolved due to Mission '{mission.name}' completion.")
-        
+
         return mission
 
     async def assign_mission(self, db: AsyncSession, mission_id: str, assignment: MissionAssignment):
         if not self._initialized:
             raise StateError("State Manager is not initialized.")
         mission = await self.mission_service.assign_mission(db, mission_id, assignment)
-        
+
         assignees = []
         if assignment.assigned_human_ids:
             assignees.extend([f"<@{uid}>" for uid in assignment.assigned_human_ids])
         if assignment.assigned_mini_agent_id:
             assignees.append(f"🤖 {assignment.assigned_mini_agent_id}")
-            
+
         desc = f"Mission assigned to: {', '.join(assignees)}" if assignees else "Mission unassigned"
-        
+
         await self.create_timeline_event(db, TimelineEventCreate(
             event_type=TimelineEventType.HUMAN_ACTION,
             description=desc,
@@ -295,16 +317,16 @@ class StateManager:
             mission_id=mission.id,
             operation_id=mission.operation_id
         ))
-        
+
         return mission
 
     # --- Mission Execution Management ---
-    
+
     async def execute_mission_manually(self, db: AsyncSession, mission_id: str):
         if not self._initialized:
             raise StateError("State Manager is not initialized.")
         return await self.mission_scheduler.dispatch_manual(db, self, mission_id)
-        
+
     async def run_mission_scheduler_tick(self, db: AsyncSession):
         if not self._initialized:
             raise StateError("State Manager is not initialized.")
@@ -343,24 +365,24 @@ class StateManager:
         if not self._initialized:
             raise StateError("State Manager is not initialized.")
         return await self.timeline_service.create_event(db, event_in)
-        
+
     async def get_timeline_event(self, db: AsyncSession, event_id: str):
         if not self._initialized:
             raise StateError("State Manager is not initialized.")
         return await self.timeline_service.get_event(db, event_id)
-        
+
     # --- Evidence Management ---
 
     async def create_evidence(self, db: AsyncSession, evidence_in: EvidenceCreate, user_id: str):
         if not self._initialized:
             raise StateError("State Manager is not initialized.")
         return await self.evidence_service.create_evidence(db, evidence_in, user_id)
-        
+
     async def get_evidence(self, db: AsyncSession, evidence_id: str):
         if not self._initialized:
             raise StateError("State Manager is not initialized.")
         return await self.evidence_service.get_evidence(db, evidence_id)
-        
+
     async def update_evidence(self, db: AsyncSession, evidence_id: str, update_data: EvidenceUpdate):
         if not self._initialized:
             raise StateError("State Manager is not initialized.")

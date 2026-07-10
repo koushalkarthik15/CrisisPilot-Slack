@@ -1,13 +1,19 @@
 import logging
-from typing import List, Optional
 from datetime import datetime, timezone
+from typing import Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from features.missions.repository import MissionRepository
-from features.missions.schemas import MissionCreate, MissionUpdate, MissionAssignment
-from features.missions.models import Mission
 from features.missions.domain import MissionStatus
-from features.missions.exceptions import MissionNotFoundError, InvalidMissionStateTransitionError, InvalidMissionOwnershipError, InvalidMissionAssignmentError
+from features.missions.exceptions import (
+    InvalidMissionAssignmentError,
+    InvalidMissionOwnershipError,
+    InvalidMissionStateTransitionError,
+    MissionNotFoundError,
+)
+from features.missions.models import Mission
+from features.missions.repository import MissionRepository
+from features.missions.schemas import MissionAssignment, MissionCreate, MissionUpdate
 
 logger = logging.getLogger("crisispilot.missions.service")
 
@@ -16,7 +22,7 @@ def utc_now():
 
 class MissionService:
     """Business logic and lifecycle management for Missions."""
-    
+
     ALLOWED_TRANSITIONS = {
         MissionStatus.CREATED: [MissionStatus.SCHEDULED, MissionStatus.RUNNING, MissionStatus.CANCELLED],
         MissionStatus.SCHEDULED: [MissionStatus.RUNNING, MissionStatus.CANCELLED],
@@ -36,7 +42,7 @@ class MissionService:
 
     async def create_mission(self, db: AsyncSession, mission_in: MissionCreate, created_by: str) -> Mission:
         self._validate_ownership(mission_in.operation_id, mission_in.incident_id)
-            
+
         mission = await self.repository.create(db, mission_in, created_by)
         logger.info(f"MissionService: Created mission {mission.id}")
         return mission
@@ -57,27 +63,27 @@ class MissionService:
     async def transition_status(self, db: AsyncSession, mission_id: str, new_status: MissionStatus) -> Mission:
         mission = await self.get_mission(db, mission_id)
         current_status = mission.status
-        
+
         if new_status not in self.ALLOWED_TRANSITIONS.get(current_status, []):
             logger.warning(f"MissionService: Failed transition for {mission_id}: {current_status.value} -> {new_status.value}")
             raise InvalidMissionStateTransitionError(current_status.value, new_status.value)
-            
+
         kwargs = {}
         if new_status == MissionStatus.RUNNING and not mission.started_at:
             kwargs["started_at"] = utc_now()
         elif new_status == MissionStatus.COMPLETED:
             kwargs["completed_at"] = utc_now()
-            
+
         updated = await self.repository.update_status(db, mission_id, new_status, **kwargs)
         logger.info(f"MissionService: Transitioned {mission_id} to {new_status.value}")
         return updated
 
     async def assign_mission(self, db: AsyncSession, mission_id: str, assignment: MissionAssignment) -> Mission:
         mission = await self.get_mission(db, mission_id)
-        
+
         if mission.status in [MissionStatus.COMPLETED, MissionStatus.CANCELLED, MissionStatus.FAILED]:
             raise InvalidMissionAssignmentError("Cannot assign a mission that is already completed, failed, or cancelled.")
-            
+
         updated = await self.repository.assign(db, mission_id, assignment)
         logger.info(f"MissionService: Updated assignment for {mission_id}")
         return updated

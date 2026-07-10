@@ -1,5 +1,6 @@
 from core.errors import CrisisPilotError
 
+
 class EvidenceNotFoundError(CrisisPilotError):
     """Raised when evidence cannot be found."""
     def __init__(self, evidence_id: str):

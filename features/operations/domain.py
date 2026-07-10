@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class OperationStatus(str, Enum):
     PLANNED = "PLANNED"
     ACTIVE = "ACTIVE"

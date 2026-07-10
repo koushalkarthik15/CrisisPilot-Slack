@@ -1,8 +1,14 @@
 from datetime import datetime
-from typing import Optional, Any, Dict
+from typing import Any, Dict, Optional
+
 from pydantic import BaseModel, Field
 
-from features.timeline.domain import TimelineEventType, TimelineEventSource, TimelineEventSeverity
+from features.timeline.domain import (
+    TimelineEventSeverity,
+    TimelineEventSource,
+    TimelineEventType,
+)
+
 
 class TimelineEventBase(BaseModel):
     event_type: TimelineEventType = Field(..., description="The type of the event")
@@ -26,6 +32,6 @@ class TimelineEventRead(TimelineEventBase):
     mission_id: Optional[str]
     workflow_id: Optional[str]
     created_at: datetime
-    
+
     class Config:
         from_attributes = True

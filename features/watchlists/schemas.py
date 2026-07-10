@@ -1,7 +1,10 @@
-from pydantic import BaseModel, Field
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel
+
 from features.incident_management.domain import IncidentSeverity
+
 
 class WatchlistBase(BaseModel):
     name: str

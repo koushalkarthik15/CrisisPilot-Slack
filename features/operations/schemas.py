@@ -1,8 +1,14 @@
 from datetime import datetime
 from typing import Optional
+
 from pydantic import BaseModel, Field
 
-from features.operations.domain import OperationStatus, OperationCategory, OperationPriority
+from features.operations.domain import (
+    OperationCategory,
+    OperationPriority,
+    OperationStatus,
+)
+
 
 class OperationBase(BaseModel):
     name: str = Field(..., description="Name of the operation")
@@ -27,6 +33,6 @@ class OperationRead(OperationBase):
     updated_at: datetime
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
-    
+
     class Config:
         from_attributes = True

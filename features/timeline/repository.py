@@ -1,5 +1,6 @@
 import logging
 from typing import List, Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -10,7 +11,7 @@ logger = logging.getLogger("crisispilot.timeline.repository")
 
 class TimelineRepository:
     """Append-only persistence layer for Timeline Events."""
-    
+
     async def create(self, db: AsyncSession, event_in: TimelineEventCreate) -> TimelineEvent:
         event = TimelineEvent(
             event_type=event_in.event_type,
@@ -41,26 +42,26 @@ class TimelineRepository:
             .order_by(TimelineEvent.created_at.desc())
         )
         return list(result.scalars().all())
-        
+
     async def list_by_incident(self, db: AsyncSession, incident_id: str) -> List[TimelineEvent]:
         result = await db.execute(
             select(TimelineEvent).where(TimelineEvent.incident_id == incident_id)
             .order_by(TimelineEvent.created_at.desc())
         )
         return list(result.scalars().all())
-        
+
     async def list_by_mission(self, db: AsyncSession, mission_id: str) -> List[TimelineEvent]:
         result = await db.execute(
             select(TimelineEvent).where(TimelineEvent.mission_id == mission_id)
             .order_by(TimelineEvent.created_at.desc())
         )
         return list(result.scalars().all())
-        
+
     async def list_by_workflow(self, db: AsyncSession, workflow_id: str) -> List[TimelineEvent]:
         result = await db.execute(
             select(TimelineEvent).where(TimelineEvent.workflow_id == workflow_id)
             .order_by(TimelineEvent.created_at.desc())
         )
         return list(result.scalars().all())
-        
+
     # NOTE: Intentionally omitted update() and delete() to enforce immutability at the repository level.

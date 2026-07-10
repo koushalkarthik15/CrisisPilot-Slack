@@ -1,43 +1,41 @@
-import pytest
-from pydantic import ValidationError
-from typing import Dict, Any
 
-from core.errors import ToolNotFoundError
-from core.orchestration.models import ExecutionContext
+import pytest
+
 from core.services import registry as service_registry
 from core.state import StateManager
-from infrastructure.mcp.registry import MCPRegistry
+from infrastructure.mcp.diagnostic import EchoTool
 from infrastructure.mcp.executor import MCPExecutor
 from infrastructure.mcp.models import ToolRequest
-from infrastructure.mcp.tools.weather import WeatherTool
-from infrastructure.mcp.tools.news import NewsTool
-from infrastructure.mcp.tools.maps import MapsTool
+from infrastructure.mcp.registry import MCPRegistry
 from infrastructure.mcp.tools.inventory import InventoryTool
-from infrastructure.mcp.diagnostic import EchoTool
+from infrastructure.mcp.tools.maps import MapsTool
+from infrastructure.mcp.tools.news import NewsTool
+from infrastructure.mcp.tools.weather import WeatherTool
+
 
 @pytest.fixture
 async def mcp_env():
     # Setup test environment with initialized registry and executor
     mcp_registry = MCPRegistry()
     await mcp_registry.initialize()
-    
+
     # Register all tools
     mcp_registry.register(EchoTool())
     mcp_registry.register(WeatherTool())
     mcp_registry.register(NewsTool())
     mcp_registry.register(MapsTool())
     mcp_registry.register(InventoryTool())
-    
+
     mcp_executor = MCPExecutor(registry=mcp_registry)
     await mcp_executor.initialize()
-    
+
     # Mock StateManager for InventoryTool
     state_manager = StateManager()
     await state_manager.initialize()
     service_registry.register(StateManager, state_manager)
-    
+
     yield {"registry": mcp_registry, "executor": mcp_executor}
-    
+
     await mcp_executor.shutdown()
     await mcp_registry.shutdown()
     await state_manager.shutdown()
@@ -63,7 +61,7 @@ async def test_supervisor_invocation_pipeline(mcp_env):
     executor = mcp_env["executor"]
     req = ToolRequest(name="diagnostic_echo", arguments={"message": "Pipeline Test"})
     res = await executor.execute_tool(req)
-    
+
     assert not res.is_error
     assert "Echo: Pipeline Test" in res.content
     assert "processed_at" in res.metadata
@@ -74,7 +72,7 @@ async def test_maps_tool_live_integration(mcp_env):
     executor = mcp_env["executor"]
     req = ToolRequest(name="maps_tool", arguments={"location": "Paris, France"})
     res = await executor.execute_tool(req)
-    
+
     assert not res.is_error
     assert "Paris" in res.content
     assert res.metadata["lat"] != "0"
@@ -85,7 +83,7 @@ async def test_weather_tool_live_integration(mcp_env):
     executor = mcp_env["executor"]
     req = ToolRequest(name="weather_tool", arguments={"location": "London"})
     res = await executor.execute_tool(req)
-    
+
     # Since API keys might be missing in CI, we check that it either succeeds or handles the API error cleanly
     assert res is not None
     if res.is_error:
@@ -99,7 +97,7 @@ async def test_news_tool_live_integration(mcp_env):
     executor = mcp_env["executor"]
     req = ToolRequest(name="news_tool", arguments={"query": "technology", "limit": 1})
     res = await executor.execute_tool(req)
-    
+
     # Check graceful error handling if API key is invalid/missing, else success
     assert res is not None
     if res.is_error:
@@ -113,7 +111,7 @@ async def test_inventory_tool_pending_validation(mcp_env):
     executor = mcp_env["executor"]
     req = ToolRequest(name="inventory_tool", arguments={"resource_type": "water", "location": "Hub A"})
     res = await executor.execute_tool(req)
-    
+
     assert not res.is_error
     assert "water" in res.content
     assert res.metadata["quantity"] == 500
@@ -124,6 +122,6 @@ async def test_invalid_tool_handling(mcp_env):
     executor = mcp_env["executor"]
     req = ToolRequest(name="non_existent_tool", arguments={})
     res = await executor.execute_tool(req)
-    
+
     assert res.is_error
     assert "ToolNotFoundError" in res.metadata.get("error", "")

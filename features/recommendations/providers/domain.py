@@ -1,6 +1,9 @@
 from typing import List
+
 from pydantic import BaseModel
+
 from features.recommendations.domain import RecommendationPriority
+
 
 class ProviderResult(BaseModel):
     title: str

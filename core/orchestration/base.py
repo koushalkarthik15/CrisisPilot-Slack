@@ -22,7 +22,7 @@ class BaseAgent(ABC):
         Must be implemented by all subclasses.
         """
         pass
-        
+
     async def _safe_execute(self, request: AgentRequest) -> AgentResponse:
         """
         Wrapper around execute to provide standardized logging and error propagation.

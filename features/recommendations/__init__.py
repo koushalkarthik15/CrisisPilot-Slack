@@ -1,8 +1,20 @@
-from .domain import RecommendationPriority, RecommendationStatus, RecommendationRuleResult
-from .exceptions import RecommendationEngineError, RecommendationNotFoundError, RecommendationImmutableError
+from .domain import (
+    RecommendationPriority,
+    RecommendationRuleResult,
+    RecommendationStatus,
+)
+from .exceptions import (
+    RecommendationEngineError,
+    RecommendationImmutableError,
+    RecommendationNotFoundError,
+)
 from .models import Recommendation
-from .schemas import RecommendationCreate, RecommendationUpdateStatus, RecommendationResponse
 from .repository import RecommendationRepository
+from .schemas import (
+    RecommendationCreate,
+    RecommendationResponse,
+    RecommendationUpdateStatus,
+)
 from .service import RecommendationService
 
 __all__ = [

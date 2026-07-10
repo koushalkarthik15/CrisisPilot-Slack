@@ -1,15 +1,17 @@
 from datetime import datetime
 from typing import Optional
+
 from pydantic import BaseModel, Field
 
 from features.monitoring.domain import (
-    MonitoringStatus,
     MonitoringCategory,
-    TargetType,
     MonitoringFrequency,
-    SituationState
+    MonitoringStatus,
+    SituationState,
+    TargetType,
 )
 from features.operations.domain import OperationPriority
+
 
 class MonitoringProfileBase(BaseModel):
     name: str = Field(..., description="Name of the monitoring profile")
@@ -49,6 +51,6 @@ class MonitoringProfileRead(MonitoringProfileBase):
     started_at: Optional[datetime]
     stopped_at: Optional[datetime]
     last_scan_at: Optional[datetime]
-    
+
     class Config:
         from_attributes = True

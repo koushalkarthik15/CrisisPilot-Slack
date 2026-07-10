@@ -3,16 +3,19 @@ import logging
 from typing import Optional
 
 from core.config import get_settings
-from infrastructure.database import AsyncSessionLocal
-from features.watchlists.service import WatchlistMonitoringService
-from features.watchlists.repository import WatchlistRepository, WatchlistArticleRepository
-from features.incident_management.service import IncidentService
-from features.incident_management.repository import IncidentRepository
-from features.recommendations.service import RecommendationService
-from features.recommendations.repository import RecommendationRepository
-from features.recommendations.intelligence import IncidentIntelligenceService
-from features.recommendations.router import RecommendationRouter
 from core.services import registry
+from features.incident_management.repository import IncidentRepository
+from features.incident_management.service import IncidentService
+from features.recommendations.intelligence import IncidentIntelligenceService
+from features.recommendations.repository import RecommendationRepository
+from features.recommendations.router import RecommendationRouter
+from features.recommendations.service import RecommendationService
+from features.watchlists.repository import (
+    WatchlistArticleRepository,
+    WatchlistRepository,
+)
+from features.watchlists.service import WatchlistMonitoringService
+from infrastructure.database import AsyncSessionLocal
 
 logger = logging.getLogger("crisispilot.watchlists.monitor")
 
@@ -44,14 +47,14 @@ class NewsMonitorCoordinator:
 
         logger.info("Stopping NewsMonitorCoordinator...")
         self._stop_event.set()
-        
+
         try:
             await asyncio.wait_for(self._task, timeout=5.0)
         except asyncio.TimeoutError:
             self._task.cancel()
         except asyncio.CancelledError:
             pass
-            
+
         self._task = None
         logger.info("NewsMonitorCoordinator stopped.")
 
@@ -62,7 +65,7 @@ class NewsMonitorCoordinator:
                 async with AsyncSessionLocal() as session:
                     intelligence_svc = registry.get(IncidentIntelligenceService)
                     router = registry.get(RecommendationRouter)
-                    
+
                     monitoring_service = WatchlistMonitoringService(
                         watchlist_repo=WatchlistRepository(),
                         article_repo=WatchlistArticleRepository(),
@@ -76,7 +79,7 @@ class NewsMonitorCoordinator:
                     await monitoring_service.run_monitoring_cycle(session)
             except Exception as e:
                 logger.error(f"Unexpected error in NewsMonitorCoordinator loop: {e}", exc_info=True)
-            
+
             # Wait for the next interval or until stopped
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self.interval)

@@ -1,11 +1,13 @@
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 from features.analytics.schemas import OperationalSummary
+
 
 def format_operational_summary_blocks(summary: OperationalSummary) -> List[Dict[str, Any]]:
     """Transforms OperationalSummary into a rich Slack Block Kit array."""
-    
+
     blocks = []
-    
+
     # Header
     blocks.append({
         "type": "header",
@@ -16,12 +18,12 @@ def format_operational_summary_blocks(summary: OperationalSummary) -> List[Dict[
         }
     })
     blocks.append({"type": "divider"})
-    
+
     # Incidents
     severity_text = " | ".join([f"{k}: {v}" for k, v in summary.incidents.severity_distribution.items()])
     if not severity_text:
         severity_text = "No incidents recorded"
-        
+
     blocks.append({
         "type": "section",
         "text": {
@@ -33,7 +35,7 @@ def format_operational_summary_blocks(summary: OperationalSummary) -> List[Dict[
                     f"• *Severity Dist:* {severity_text}"
         }
     })
-    
+
     # Operations
     blocks.append({
         "type": "section",
@@ -44,7 +46,7 @@ def format_operational_summary_blocks(summary: OperationalSummary) -> List[Dict[
                     f"• *Completed:* {summary.operations.completed}"
         }
     })
-    
+
     # Missions
     blocks.append({
         "type": "section",
@@ -56,7 +58,7 @@ def format_operational_summary_blocks(summary: OperationalSummary) -> List[Dict[
                     f"• *Failed:* {summary.missions.failed}"
         }
     })
-    
+
     # Recommendations
     blocks.append({
         "type": "section",
@@ -69,7 +71,7 @@ def format_operational_summary_blocks(summary: OperationalSummary) -> List[Dict[
                     f"• *Approval Rate:* {summary.recommendations.approval_rate_percent}%"
         }
     })
-    
+
     # Intelligence
     blocks.append({
         "type": "section",
@@ -82,7 +84,7 @@ def format_operational_summary_blocks(summary: OperationalSummary) -> List[Dict[
                     f"• *MCP Executions:* {summary.mcp['status']}"
         }
     })
-    
+
     # LLM Usage
     blocks.append({
         "type": "section",
@@ -94,7 +96,7 @@ def format_operational_summary_blocks(summary: OperationalSummary) -> List[Dict[
                     f"• *Active Concurrent:* {summary.llm.concurrent_requests}"
         }
     })
-    
+
     blocks.append({
         "type": "context",
         "elements": [
@@ -104,5 +106,5 @@ def format_operational_summary_blocks(summary: OperationalSummary) -> List[Dict[
             }
         ]
     })
-    
+
     return blocks

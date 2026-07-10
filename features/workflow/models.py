@@ -1,8 +1,12 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, DateTime, Enum as SQLEnum
-from infrastructure.database import Base
+
+from sqlalchemy import Column, DateTime, String
+from sqlalchemy import Enum as SQLEnum
+
 from features.workflow.domain import DecisionAction
+from infrastructure.database import Base
+
 
 def utc_now():
     return datetime.now(timezone.utc)
@@ -18,5 +22,5 @@ class AuditRecord(Base):
     previous_status = Column(String, nullable=False)
     new_status = Column(String, nullable=False)
     comments = Column(String, nullable=True)
-    
+
     timestamp = Column(DateTime(timezone=True), default=utc_now, nullable=False)

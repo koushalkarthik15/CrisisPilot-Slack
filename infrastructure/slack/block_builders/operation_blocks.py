@@ -1,6 +1,8 @@
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 from features.operations.models import Operation
 from infrastructure.slack.block_builders.shared_actions import build_quick_actions
+
 
 def build_operation_list_blocks(operations: List[Operation]) -> List[Dict[str, Any]]:
     blocks = [
@@ -14,14 +16,14 @@ def build_operation_list_blocks(operations: List[Operation]) -> List[Dict[str, A
         },
         {"type": "divider"}
     ]
-    
+
     if not operations:
         blocks.append({
             "type": "section",
             "text": {"type": "mrkdwn", "text": "No active operations found."}
         })
         return blocks
-        
+
     for op in operations:
         status_emoji = "🟢" if op.status.name == "ACTIVE" else "🟡" if op.status.name == "PAUSED" else "⚪"
         blocks.append({
@@ -41,13 +43,13 @@ def build_operation_list_blocks(operations: List[Operation]) -> List[Dict[str, A
             }
         })
         blocks.append({"type": "divider"})
-        
+
     return blocks
 
 def build_operation_detail_blocks(operation: Operation, stats: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Builds a detailed dashboard for a single operation."""
     status_emoji = "🟢" if operation.status.name == "ACTIVE" else "⚪"
-    
+
     blocks = [
         {
             "type": "header",
@@ -81,5 +83,5 @@ def build_operation_detail_blocks(operation: Operation, stats: Dict[str, Any]) -
         },
         build_quick_actions(operation.id, "operation")
     ]
-    
+
     return blocks

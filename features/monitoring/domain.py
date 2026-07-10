@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class MonitoringStatus(Enum):
     PLANNED = "PLANNED"
     ACTIVE = "ACTIVE"

@@ -1,13 +1,14 @@
 import logging
+
+from core.llm.base import BaseLLMProvider
 from core.orchestration.base import BaseMiniAgent
 from core.orchestration.models import AgentRequest, AgentResponse, ToolInvocation
 from core.services import registry as service_registry
-from core.llm.base import BaseLLMProvider
+from features.mini_agents.exceptions import MiniAgentExecutionError
+from features.mini_agents.reasoning import ToolSelectionService
 from infrastructure.mcp.executor import MCPExecutor
 from infrastructure.mcp.models import ToolRequest
 from infrastructure.mcp.registry import MCPRegistry
-from features.mini_agents.reasoning import ToolSelectionService
-from features.mini_agents.exceptions import MiniAgentExecutionError
 
 logger = logging.getLogger("crisispilot.mini_agents.intelligent_agent")
 
@@ -28,13 +29,13 @@ class IntelligentMiniAgent(BaseMiniAgent):
 
     async def execute(self, request: AgentRequest) -> AgentResponse:
         logger.info(f"[{self.name}] Intelligent execution started for prompt: '{request.prompt}'")
-        
+
         if not self.tool_service:
             raise MiniAgentExecutionError("IntelligentMiniAgent not properly initialized (ToolSelectionService missing).")
 
         # 1. Select Tool
         decision = await self.tool_service.select_tool(request.prompt, self.allowed_tools)
-        
+
         # 2. If no tool selected
         if not decision.tool:
             return AgentResponse(
@@ -48,10 +49,10 @@ class IntelligentMiniAgent(BaseMiniAgent):
             name=decision.tool,
             arguments=decision.arguments
         )
-        
+
         tool_invocations = [ToolInvocation(tool_name=decision.tool, arguments=decision.arguments)]
         logger.debug(f"[{self.name}] Invoking MCP tool '{tool_req.name}'")
-        
+
         tool_response = await mcp_executor.execute_tool(tool_req)
 
         # 4. Return formatted response

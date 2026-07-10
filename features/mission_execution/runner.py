@@ -2,8 +2,8 @@ import asyncio
 import logging
 from typing import Optional
 
-from infrastructure.database import AsyncSessionLocal
 from core.services import registry
+from infrastructure.database import AsyncSessionLocal
 
 logger = logging.getLogger("crisispilot.mission_execution.runner")
 
@@ -33,14 +33,14 @@ class MissionSchedulerBackgroundRunner:
 
         logger.info("Stopping MissionSchedulerBackgroundRunner...")
         self._stop_event.set()
-        
+
         try:
             await asyncio.wait_for(self._task, timeout=5.0)
         except asyncio.TimeoutError:
             self._task.cancel()
         except asyncio.CancelledError:
             pass
-            
+
         self._task = None
         logger.info("MissionSchedulerBackgroundRunner stopped.")
 
@@ -53,7 +53,7 @@ class MissionSchedulerBackgroundRunner:
                     await state_manager.run_mission_scheduler_tick(session)
             except Exception as e:
                 logger.error(f"Unexpected error in MissionScheduler tick loop: {e}", exc_info=True)
-            
+
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self.interval)
             except asyncio.TimeoutError:

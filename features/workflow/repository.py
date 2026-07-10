@@ -1,9 +1,12 @@
 from typing import List
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from shared.repository import BaseRepository
+
 from features.workflow.models import AuditRecord
 from features.workflow.schemas import AuditRecordCreate
+from shared.repository import BaseRepository
+
 
 # Note: Audit records are immutable, so we don't have an Update schema
 class AuditRecordUpdateDummy:

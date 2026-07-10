@@ -1,5 +1,6 @@
 from core.errors import CrisisPilotError
 
+
 class WorkflowNotFoundError(CrisisPilotError):
     """Raised when a workflow cannot be found."""
     def __init__(self, workflow_id: str):

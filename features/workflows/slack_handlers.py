@@ -1,34 +1,40 @@
 import logging
+
 from slack_bolt.async_app import AsyncApp
-from infrastructure.database import get_db_session
+
 from core.services import registry as service_registry
 from core.state import StateManager
-from infrastructure.slack_blocks import build_workflow_list_blocks, build_workflow_detail_blocks
+from infrastructure.database import get_db_session
+from infrastructure.slack_blocks import (
+    build_workflow_detail_blocks,
+    build_workflow_list_blocks,
+)
 
 logger = logging.getLogger("crisispilot.workflows.slack_handlers")
 
 def register_operational_workflow_handlers(app: AsyncApp) -> None:
-    
+
     @app.command("/workflows")
     @app.command("/list-workflows")
     async def list_workflows_command(ack, body, client):
         await ack()
         channel_id = body.get("channel_id")
         user_id = body.get("user_id")
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
-            
+
             # Use repository to fetch recently created workflows
             from sqlalchemy.future import select
+
             from features.workflows.models import Workflow
             result = await session.execute(select(Workflow).order_by(Workflow.created_at.desc()).limit(20))
             workflows = list(result.scalars().all())
-            
+
             blocks = build_workflow_list_blocks(workflows)
             await client.chat_postMessage(channel=channel_id, text="Active Operational Workflows", blocks=blocks)
-            
+
             await session.close()
         except Exception as e:
             logger.error(f"Error listing workflows: {e}", exc_info=True)
@@ -39,25 +45,25 @@ def register_operational_workflow_handlers(app: AsyncApp) -> None:
         channel_id = body.get("channel_id")
         user_id = body.get("user_id")
         workflow_id = command.get("text", "").strip()
-        
+
         if not workflow_id:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text="Please provide a workflow ID. Example: `/workflow WF-1234`")
             return
-            
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
             state_manager = service_registry.get(StateManager)
-            
+
             workflow = await state_manager.operational_workflow_service.get_workflow(session, workflow_id)
             if not workflow:
                 await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"Workflow `{workflow_id}` not found.")
                 await session.close()
                 return
-                
+
             blocks = build_workflow_detail_blocks(workflow)
             await client.chat_postMessage(channel=channel_id, text=f"Workflow Dashboard: {workflow.name}", blocks=blocks)
-            
+
             await session.close()
         except Exception as e:
             logger.error(f"Error viewing workflow {workflow_id}: {e}", exc_info=True)
@@ -67,17 +73,17 @@ def register_operational_workflow_handlers(app: AsyncApp) -> None:
         await ack()
         workflow_id = body["actions"][0]["value"]
         channel_id = body["channel"]["id"]
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
             state_manager = service_registry.get(StateManager)
-            
+
             workflow = await state_manager.operational_workflow_service.get_workflow(session, workflow_id)
             if workflow:
                 blocks = build_workflow_detail_blocks(workflow)
                 await client.chat_postMessage(channel=channel_id, text=f"Workflow Dashboard: {workflow.name}", blocks=blocks)
-                
+
             await session.close()
         except Exception as e:
             logger.error(f"Error showing workflow details: {e}", exc_info=True)
@@ -89,22 +95,22 @@ def register_operational_workflow_handlers(app: AsyncApp) -> None:
         workflow_id = val.split("_")[1]
         channel_id = body["channel"]["id"]
         user_id = body["user"]["id"]
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
             state_manager = service_registry.get(StateManager)
-            
+
             # Post loading message
             loading_msg = await client.chat_postMessage(channel=channel_id, text=f"➡️ Advancing workflow `{workflow_id}`...")
             ts = loading_msg.get("ts")
-            
+
             workflow = await state_manager.advance_operational_workflow_stage(session, workflow_id)
             await session.commit()
-            
+
             blocks = build_workflow_detail_blocks(workflow)
             await client.chat_update(channel=channel_id, ts=ts, text=f"Workflow Advanced: {workflow.name}", blocks=blocks)
-            
+
             await session.close()
         except Exception as e:
             logger.error(f"Error advancing workflow {workflow_id}: {e}", exc_info=True)
@@ -118,7 +124,7 @@ def register_operational_workflow_handlers(app: AsyncApp) -> None:
         mission_id = parts[1]
         operation_id = parts[2] if len(parts) > 2 else ""
         channel_id = body["channel"]["id"]
-        
+
         try:
             from features.workflows.domain import WorkflowPriority
             await client.views_open(
@@ -170,7 +176,7 @@ def register_operational_workflow_handlers(app: AsyncApp) -> None:
         channel_id = body.get("channel_id")
         user_id = body.get("user_id")
         operation_id = command.get("text", "").strip()
-        
+
         try:
             from features.workflows.domain import WorkflowPriority
             await client.views_open(
@@ -224,24 +230,24 @@ def register_operational_workflow_handlers(app: AsyncApp) -> None:
         mission_id = meta[1]
         operation_id = meta[2] if meta[2] else None
         user_id = body["user"]["id"]
-        
+
         name = values["name_block"]["name_input"]["value"]
         desc = values["desc_block"]["desc_input"]["value"]
         priority = values["priority_block"]["priority_input"]["selected_option"]["value"]
-        
+
         await ack()
-        
+
         try:
-            from features.workflows.schemas import WorkflowCreate
             from features.workflows.domain import WorkflowPriority, WorkflowStageType
-            
+            from features.workflows.schemas import WorkflowCreate
+
             session_gen = get_db_session()
             session = await anext(session_gen)
             state_manager = service_registry.get(StateManager)
-            
+
             # Use standard response stages for manual workflow creation
             stages = [WorkflowStageType.INVESTIGATION, WorkflowStageType.EVIDENCE_COLLECTION, WorkflowStageType.REVIEW]
-            
+
             wf_in = WorkflowCreate(
                 name=name,
                 description=desc,
@@ -249,10 +255,10 @@ def register_operational_workflow_handlers(app: AsyncApp) -> None:
                 stages=stages,
                 operation_id=operation_id
             )
-            
+
             workflow = await state_manager.create_operational_workflow(session, wf_in, user_id)
             await session.commit()
-            
+
             blocks = build_workflow_detail_blocks(workflow)
             await client.chat_postMessage(channel=channel_id, text=f"Workflow Created: {workflow.name}", blocks=blocks)
             await session.close()

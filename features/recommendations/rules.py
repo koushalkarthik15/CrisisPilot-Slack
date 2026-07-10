@@ -1,5 +1,10 @@
-from typing import List, Dict, Any
-from features.recommendations.domain import RecommendationRuleResult, RecommendationPriority
+from typing import Any, Dict, List
+
+from features.recommendations.domain import (
+    RecommendationPriority,
+    RecommendationRuleResult,
+)
+
 
 class DeterministicRuleEngine:
     """
@@ -9,7 +14,7 @@ class DeterministicRuleEngine:
     def evaluate(self, incident_context: Dict[str, Any], mcp_outputs: List[Dict[str, Any]]) -> List[RecommendationRuleResult]:
         results = []
         severity = incident_context.get("severity", "Low").upper()
-        
+
         # Rule 1: High severity incident triggers rapid evacuation recommendation
         if severity in ["HIGH", "CRITICAL"]:
             results.append(
@@ -24,7 +29,7 @@ class DeterministicRuleEngine:
                     ]
                 )
             )
-            
+
         # Rule 2: Based on MCP context (e.g., Weather tool indicating rain)
         weather_data = next((output for output in mcp_outputs if "Weather in" in output.get("content", "")), None)
         if weather_data and "Rain" in weather_data.get("content", ""):
@@ -40,7 +45,7 @@ class DeterministicRuleEngine:
                     ]
                 )
             )
-             
+
         # Fallback Rule: Generic resource check
         if not results:
              results.append(
@@ -55,5 +60,5 @@ class DeterministicRuleEngine:
                     ]
                 )
             )
-            
+
         return results

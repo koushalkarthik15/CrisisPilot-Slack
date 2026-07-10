@@ -1,17 +1,18 @@
 import logging
-from typing import List, Optional
+from typing import List
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from features.evidence.exceptions import EvidenceNotFoundError, InvalidEvidenceError
+from features.evidence.models import Evidence
 from features.evidence.repository import EvidenceRepository
 from features.evidence.schemas import EvidenceCreate, EvidenceUpdate
-from features.evidence.models import Evidence
-from features.evidence.exceptions import InvalidEvidenceError, EvidenceNotFoundError
 
 logger = logging.getLogger("crisispilot.evidence.service")
 
 class EvidenceService:
     """Business logic and validation for Evidence."""
-    
+
     def __init__(self, repository: EvidenceRepository):
         self.repository = repository
 
@@ -22,7 +23,7 @@ class EvidenceService:
 
     async def create_evidence(self, db: AsyncSession, evidence_in: EvidenceCreate, submitted_by: str) -> Evidence:
         self._validate_ownership(evidence_in)
-        
+
         evidence = await self.repository.create(db, evidence_in, submitted_by)
         logger.info(f"EvidenceService: Created evidence {evidence.id}")
         return evidence
@@ -42,12 +43,12 @@ class EvidenceService:
 
     async def list_evidence_by_operation(self, db: AsyncSession, operation_id: str) -> List[Evidence]:
         return await self.repository.list_by_operation(db, operation_id)
-        
+
     async def list_evidence_by_incident(self, db: AsyncSession, incident_id: str) -> List[Evidence]:
         return await self.repository.list_by_incident(db, incident_id)
-        
+
     async def list_evidence_by_mission(self, db: AsyncSession, mission_id: str) -> List[Evidence]:
         return await self.repository.list_by_mission(db, mission_id)
-        
+
     async def list_evidence_by_workflow(self, db: AsyncSession, workflow_id: str) -> List[Evidence]:
         return await self.repository.list_by_workflow(db, workflow_id)

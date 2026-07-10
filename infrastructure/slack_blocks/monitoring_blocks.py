@@ -1,6 +1,8 @@
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 from features.monitoring.models import MonitoringProfile
 from infrastructure.slack_blocks.shared_actions import build_quick_actions
+
 
 def build_monitoring_list_blocks(profiles: List[MonitoringProfile]) -> List[Dict[str, Any]]:
     blocks = [
@@ -10,18 +12,18 @@ def build_monitoring_list_blocks(profiles: List[MonitoringProfile]) -> List[Dict
         },
         {"type": "divider"}
     ]
-    
+
     if not profiles:
         blocks.append({
             "type": "section",
             "text": {"type": "mrkdwn", "text": "No active monitoring profiles found."}
         })
         return blocks
-        
+
     for profile in profiles:
         status_emoji = "🟢" if profile.status.name == "ACTIVE" else "⚪"
         risk_emoji = "🔴" if profile.current_situation_state.name == "CRITICAL" else "🟠" if profile.current_situation_state.name == "WARNING" else "🟢"
-        
+
         blocks.append({
             "type": "section",
             "text": {
@@ -38,13 +40,13 @@ def build_monitoring_list_blocks(profiles: List[MonitoringProfile]) -> List[Dict
             }
         })
         blocks.append({"type": "divider"})
-        
+
     return blocks
 
 def build_monitoring_dashboard_blocks(profile: MonitoringProfile) -> List[Dict[str, Any]]:
     status_emoji = "🟢" if profile.status.name == "ACTIVE" else "⚪"
     risk_emoji = "🔴" if profile.current_situation_state.name == "CRITICAL" else "🟠" if profile.current_situation_state.name == "WARNING" else "🟢"
-    
+
     blocks = [
         {
             "type": "header",
@@ -68,26 +70,26 @@ def build_monitoring_dashboard_blocks(profile: MonitoringProfile) -> List[Dict[s
                                              f"*Current Risk Score:* {profile.current_risk_score:.1f}"}
         }
     ]
-    
+
     context_str = []
     if profile.operation_id:
         context_str.append(f"*Linked Operation:* `{profile.operation_id}`")
     if profile.last_scan_at:
         context_str.append(f"*Last Scan:* {profile.last_scan_at.strftime('%Y-%m-%d %H:%M UTC')}")
     else:
-        context_str.append(f"*Last Scan:* Pending")
-        
+        context_str.append("*Last Scan:* Pending")
+
     if context_str:
         blocks.append({
             "type": "context",
             "elements": [{"type": "mrkdwn", "text": " | ".join(context_str)}]
         })
-        
+
     blocks.append({"type": "divider"})
-    
+
     if profile.operation_id:
         blocks.append(build_quick_actions(profile.operation_id, "operation"))
-        
+
     # Quick action for stop monitoring and force scan
     blocks.append({
         "type": "actions",
@@ -107,7 +109,7 @@ def build_monitoring_dashboard_blocks(profile: MonitoringProfile) -> List[Dict[s
             }
         ]
     })
-    
+
     return blocks
 
 def build_monitoring_started_blocks(profile: MonitoringProfile, missions: list) -> List[Dict[str, Any]]:
@@ -116,10 +118,10 @@ def build_monitoring_started_blocks(profile: MonitoringProfile, missions: list) 
     for m in missions:
         provisioned_text += f"✓ {m.name}\n"
     provisioned_text += "✓ Scheduler registered"
-    
+
     # Fake next scan for UI formatting (or just say 'Pending')
     next_scan_text = "Pending"
-    
+
     blocks = [
         {
             "type": "header",

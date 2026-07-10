@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
+
 from core.llm.models import LLMRequest, LLMResponse
+
 
 class BaseLLMProvider(ABC):
     """
@@ -7,7 +9,7 @@ class BaseLLMProvider(ABC):
     Future providers (Groq, OpenAI, Gemini) must implement this interface
     so that business logic and Mini-Agents remain vendor-agnostic.
     """
-    
+
     @abstractmethod
     async def initialize(self) -> None:
         """Bootstraps the provider, validates credentials and config."""

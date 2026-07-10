@@ -1,5 +1,6 @@
 from core.errors import CrisisPilotError
 
+
 class MissionNotFoundError(CrisisPilotError):
     """Raised when a mission cannot be found."""
     def __init__(self, mission_id: str):

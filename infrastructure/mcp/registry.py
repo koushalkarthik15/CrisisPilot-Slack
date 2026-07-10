@@ -35,7 +35,7 @@ class MCPRegistry:
         """Registers a new tool into the registry."""
         if tool.name in self._tools:
             logger.warning(f"Overwriting existing tool registration: {tool.name}")
-            
+
         self._tools[tool.name] = tool
         logger.info(f"Registered MCP tool: {tool.name}")
 

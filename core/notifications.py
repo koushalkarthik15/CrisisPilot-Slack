@@ -2,9 +2,9 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from core.errors import NotificationError
-from features.workflow.domain import WorkflowEventPayload
 from features.incident_management.models import Incident
 from features.recommendations.models import Recommendation
+from features.workflow.domain import WorkflowEventPayload
 
 logger = logging.getLogger("crisispilot.notifications")
 
@@ -36,7 +36,7 @@ class NotificationEngine:
         """
         if not self._initialized:
             raise NotificationError("Notification Engine is not initialized.")
-            
+
         try:
             logger.debug(f"Dispatching notification to {channel_id}")
             response = await self.client.chat_postMessage(
@@ -68,7 +68,7 @@ class NotificationEngine:
         """Sends a message to a specific thread in Slack."""
         if not self._initialized:
             raise NotificationError("Notification Engine is not initialized.")
-            
+
         try:
             response = await self.client.chat_postMessage(
                 channel=channel_id,
@@ -85,7 +85,7 @@ class NotificationEngine:
         """Sends a direct message to a specific user in Slack."""
         if not self._initialized:
             raise NotificationError("Notification Engine is not initialized.")
-            
+
         try:
             dm = await self.client.conversations_open(users=user_id)
             dm_channel = dm["channel"]["id"]
@@ -98,12 +98,12 @@ class NotificationEngine:
         except Exception as e:
             logger.error(f"Failed to dispatch direct message to user {user_id}: {e}")
             raise NotificationError(f"Slack API error: {e}") from e
-            
+
     async def update_message(self, channel_id: str, ts: str, text: str, blocks: Optional[List[Dict]] = None) -> None:
         """Updates an existing message in Slack."""
         if not self._initialized:
             raise NotificationError("Notification Engine is not initialized.")
-            
+
         try:
             await self.client.chat_update(
                 channel=channel_id,
@@ -123,7 +123,7 @@ class NotificationEngine:
             "MEDIUM": "🟠",
             "LOW": "🟡"
         }.get(incident.severity.name, "ℹ️")
-        
+
         blocks = [
             {
                 "type": "header",
@@ -151,7 +151,7 @@ class NotificationEngine:
             },
             {"type": "divider"}
         ]
-        
+
         if incident.status.name not in ["RESOLVED", "ARCHIVED"]:
             blocks.append({
                 "type": "actions",
@@ -203,19 +203,19 @@ class NotificationEngine:
                     }
                 ]
             })
-            
+
         return blocks
 
     async def publish_incident_created(self, incident: Incident, channel_id: str) -> str:
         """Publishes a rich Block Kit incident card to the specified channel and returns the thread_ts."""
         blocks = self.build_incident_card_blocks(incident)
-        
+
         return await self.dispatch_message(
             channel_id=channel_id,
             text=f"Incident Declared: {incident.title}",
             blocks=blocks
         )
-        
+
     async def publish_recommendation(self, recommendation: Recommendation, channel_id: str, thread_ts: Optional[str] = None) -> str:
         """Publishes a recommendation inside an incident thread with Approve/Reject interactive buttons."""
         blocks = [
@@ -246,7 +246,7 @@ class NotificationEngine:
                 ]
             }
         ]
-        
+
         if thread_ts:
             return await self.dispatch_threaded_message(
                 channel_id=channel_id,
@@ -267,7 +267,7 @@ class NotificationEngine:
         """
         if not self._initialized:
             raise NotificationError("Notification Engine is not initialized.")
-            
+
         logger.info(
             f"Workflow Event: Recommendation {event.recommendation_id} "
             f"was {event.action.value} by {event.reviewer_id}. Status: {event.status.value}"

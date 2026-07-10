@@ -1,11 +1,12 @@
 import json
 import logging
 from enum import Enum
-from typing import List, Optional
+from typing import List
+
 from pydantic import BaseModel, Field
 
-from core.llm.models import LLMRequest
 from core.llm.base import BaseLLMProvider
+from core.llm.models import LLMRequest
 
 logger = logging.getLogger("crisispilot.recommendations.intelligence")
 
@@ -45,7 +46,7 @@ class IncidentIntelligenceService:
 
     async def classify_incident(self, incident_title: str, incident_description: str) -> IncidentClassification:
         schema_json = IncidentClassification.model_json_schema()
-        
+
         prompt = f"""
         Classify the following incident and output ONLY valid JSON matching the schema below.
         
@@ -55,14 +56,14 @@ class IncidentIntelligenceService:
         JSON Schema:
         {json.dumps(schema_json, indent=2)}
         """
-        
+
         request = LLMRequest(
             prompt=prompt,
             response_format={"type": "json_object"},
             system_prompt="You are an expert incident classification system. Your only job is to output structured JSON matching the provided schema exactly. Do not include markdown formatting, backticks, or extra text. Output RAW JSON.",
             max_tokens=800
         )
-        
+
         response = await self.llm_provider.generate(request)
         try:
             raw_text = response.content.strip()
@@ -70,7 +71,7 @@ class IncidentIntelligenceService:
                 raw_text = raw_text[7:-3].strip()
             elif raw_text.startswith("```"):
                 raw_text = raw_text[3:-3].strip()
-                
+
             parsed = json.loads(raw_text)
             return IncidentClassification(**parsed)
         except Exception as e:

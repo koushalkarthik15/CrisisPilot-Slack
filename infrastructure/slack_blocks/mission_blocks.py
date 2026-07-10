@@ -1,6 +1,8 @@
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 from features.missions.models import Mission
 from infrastructure.slack_blocks.shared_actions import build_quick_actions
+
 
 def _format_owners(mission: Mission) -> str:
     owners = []
@@ -23,14 +25,14 @@ def build_mission_list_blocks(missions: List[Mission]) -> List[Dict[str, Any]]:
         },
         {"type": "divider"}
     ]
-    
+
     if not missions:
         blocks.append({
             "type": "section",
             "text": {"type": "mrkdwn", "text": "No active missions found."}
         })
         return blocks
-        
+
     for m in missions:
         status_emoji = "🟢" if m.status.name == "RUNNING" else "⚪" if m.status.name == "COMPLETED" else "🟡"
         blocks.append({
@@ -49,13 +51,13 @@ def build_mission_list_blocks(missions: List[Mission]) -> List[Dict[str, Any]]:
             }
         })
         blocks.append({"type": "divider"})
-        
+
     return blocks
 
 def build_mission_detail_blocks(mission: Mission, current_stage: str = "N/A", viewer_id: str = None) -> List[Dict[str, Any]]:
     """Builds a detailed dashboard for a single mission."""
     status_emoji = "🟢" if mission.status.name == "RUNNING" else "⚪" if mission.status.name == "COMPLETED" else "🔴" if mission.status.name == "FAILED" else "🟡"
-    
+
     blocks = [
         {
             "type": "header",
@@ -73,7 +75,7 @@ def build_mission_detail_blocks(mission: Mission, current_stage: str = "N/A", vi
             ]
         }
     ]
-    
+
     if mission.operation_id or mission.incident_id:
         context_str = []
         if mission.operation_id:
@@ -84,27 +86,27 @@ def build_mission_detail_blocks(mission: Mission, current_stage: str = "N/A", vi
             "type": "context",
             "elements": [{"type": "mrkdwn", "text": " | ".join(context_str)}]
         })
-        
+
     blocks.append({
         "type": "section",
         "text": {"type": "mrkdwn", "text": f"*Objective:*\n> {mission.objective}"}
     })
-    
+
     if getattr(mission, "last_execution_time", None):
         blocks.append({
             "type": "context",
             "elements": [{"type": "mrkdwn", "text": f"Last Execution: {mission.last_execution_time.strftime('%Y-%m-%d %H:%M UTC')}"}]
         })
-        
+
     blocks.append({"type": "divider"})
-    
+
     assigned_human_ids = []
     if mission.assigned_human_ids:
         human_ids = mission.assigned_human_ids
         if isinstance(human_ids, str):
             human_ids = human_ids.split(",")
         assigned_human_ids = [uid for uid in human_ids if uid]
-        
+
     blocks.append(build_quick_actions(mission.id, "mission", mission.operation_id, viewer_id=viewer_id, assigned_human_ids=assigned_human_ids, entity_status=mission.status.name))
-    
+
     return blocks

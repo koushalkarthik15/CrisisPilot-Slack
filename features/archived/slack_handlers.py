@@ -1,8 +1,10 @@
 import logging
+
 from slack_bolt.async_app import AsyncApp
-from infrastructure.database import get_db_session
+
 from core.services import registry as service_registry
 from core.state import StateManager
+from infrastructure.database import get_db_session
 
 logger = logging.getLogger("crisispilot.archived.slack_handlers")
 
@@ -14,14 +16,14 @@ def register_archived_handlers(app: AsyncApp) -> None:
         channel_id = body.get("channel_id")
         user_id = body.get("user_id")
         text = command.get("text", "").strip().lower()
-        
+
         target = text if text in ["incidents", "operations", "missions"] else "all"
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
             state_manager = service_registry.get(StateManager)
-            
+
             blocks = [
                 {
                     "type": "header",
@@ -29,14 +31,15 @@ def register_archived_handlers(app: AsyncApp) -> None:
                 },
                 {"type": "divider"}
             ]
-            
+
             found_any = False
-            
+
             if target in ["all", "incidents"]:
                 from sqlalchemy.future import select
-                from features.incident_management.models import Incident
+
                 from features.incident_management.domain import IncidentStatus
-                
+                from features.incident_management.models import Incident
+
                 result = await session.execute(
                     select(Incident)
                     .where(Incident.status.in_([IncidentStatus.RESOLVED, IncidentStatus.ARCHIVED]))
@@ -58,12 +61,13 @@ def register_archived_handlers(app: AsyncApp) -> None:
                                 "action_id": "global_view_timeline" # Repurpose view timeline for viewing archived
                             }
                         })
-            
+
             if target in ["all", "operations"]:
-                from features.operations.models import Operation
-                from features.operations.domain import OperationStatus
                 from sqlalchemy.future import select
-                
+
+                from features.operations.domain import OperationStatus
+                from features.operations.models import Operation
+
                 result = await session.execute(
                     select(Operation)
                     .where(Operation.status.in_([OperationStatus.COMPLETED, OperationStatus.ARCHIVED]))
@@ -85,12 +89,13 @@ def register_archived_handlers(app: AsyncApp) -> None:
                                 "action_id": "op_view_dashboard"
                             }
                         })
-                        
+
             if target in ["all", "missions"]:
-                from features.missions.models import Mission
-                from features.missions.domain import MissionStatus
                 from sqlalchemy.future import select
-                
+
+                from features.missions.domain import MissionStatus
+                from features.missions.models import Mission
+
                 result = await session.execute(
                     select(Mission)
                     .where(Mission.status.in_([MissionStatus.COMPLETED, MissionStatus.FAILED, MissionStatus.CANCELLED]))
@@ -112,12 +117,12 @@ def register_archived_handlers(app: AsyncApp) -> None:
                                 "action_id": "mission_view_details"
                             }
                         })
-            
+
             if not found_any:
                 blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "No archived entities found."}})
-                
+
             await client.chat_postMessage(channel=channel_id, text="Archived Entities", blocks=blocks)
-            
+
             await session.close()
         except Exception as e:
             logger.error(f"Error listing archived entities: {e}", exc_info=True)

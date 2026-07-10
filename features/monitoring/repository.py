@@ -1,17 +1,18 @@
 import logging
 from typing import List, Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
+from features.monitoring.domain import MonitoringStatus
 from features.monitoring.models import MonitoringProfile
 from features.monitoring.schemas import MonitoringProfileCreate, MonitoringProfileUpdate
-from features.monitoring.domain import MonitoringStatus
 
 logger = logging.getLogger("crisispilot.monitoring.repository")
 
 class MonitoringRepository:
     """Persistence layer for Monitoring Profiles."""
-    
+
     async def create(self, db: AsyncSession, profile_in: MonitoringProfileCreate, created_by: str) -> MonitoringProfile:
         profile = MonitoringProfile(
             name=profile_in.name,
@@ -36,7 +37,7 @@ class MonitoringRepository:
     async def get(self, db: AsyncSession, profile_id: str) -> Optional[MonitoringProfile]:
         result = await db.execute(select(MonitoringProfile).where(MonitoringProfile.id == profile_id))
         return result.scalars().first()
-        
+
     async def get_by_name(self, db: AsyncSession, name: str) -> Optional[MonitoringProfile]:
         result = await db.execute(select(MonitoringProfile).where(MonitoringProfile.name == name))
         return result.scalars().first()
@@ -53,14 +54,14 @@ class MonitoringRepository:
         profile = await self.get(db, profile_id)
         if not profile:
             return None
-            
+
         update_dict = update_data.model_dump(exclude_unset=True)
         if not update_dict:
             return profile
-            
+
         for key, value in update_dict.items():
             setattr(profile, key, value)
-            
+
         await db.flush()
         await db.refresh(profile)
         logger.info(f"Updated monitoring profile {profile_id}")
@@ -70,11 +71,11 @@ class MonitoringRepository:
         profile = await self.get(db, profile_id)
         if not profile:
             return None
-            
+
         profile.status = new_status
         for key, value in kwargs.items():
             setattr(profile, key, value)
-            
+
         await db.flush()
         await db.refresh(profile)
         logger.info(f"Updated status for monitoring profile {profile_id} to {new_status}")

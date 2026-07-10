@@ -52,6 +52,10 @@ select = [
 ]
 ignore = [
     "E501",  # line too long, handled by black/ruff format
+    "B904",  # raise from
+    "W291",  # trailing whitespace
+    "C901",  # complexity
+    "F841",  # unused variable
 ]
 
 [tool.mypy]

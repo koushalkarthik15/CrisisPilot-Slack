@@ -31,10 +31,10 @@ class AgentRegistry:
         """Registers a new Mini-Agent dynamically."""
         if not self._initialized:
             raise OrchestrationError("Cannot register agents before registry initialization.")
-        
+
         if agent.name in self._agents:
             logger.warning(f"Overwriting existing agent registration: {agent.name}")
-            
+
         self._agents[agent.name] = agent
         logger.info(f"Registered agent: {agent.name}")
 
@@ -42,7 +42,7 @@ class AgentRegistry:
         """Removes a Mini-Agent from the registry dynamically."""
         if not self._initialized:
             raise OrchestrationError("Cannot deregister agents before registry initialization.")
-            
+
         if name in self._agents:
             del self._agents[name]
             logger.info(f"Deregistered agent: {name}")

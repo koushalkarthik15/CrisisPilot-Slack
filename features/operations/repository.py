@@ -1,18 +1,18 @@
 import logging
 from typing import List, Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import update
 
+from features.operations.domain import OperationStatus
 from features.operations.models import Operation
 from features.operations.schemas import OperationCreate, OperationUpdate
-from features.operations.domain import OperationStatus
 
 logger = logging.getLogger("crisispilot.operations.repository")
 
 class OperationRepository:
     """Persistence layer for Operations."""
-    
+
     async def create(self, db: AsyncSession, operation_in: OperationCreate, created_by: str) -> Operation:
         operation = Operation(
             name=operation_in.name,
@@ -47,14 +47,14 @@ class OperationRepository:
         operation = await self.get(db, operation_id)
         if not operation:
             return None
-            
+
         update_dict = update_data.model_dump(exclude_unset=True)
         if not update_dict:
             return operation
-            
+
         for key, value in update_dict.items():
             setattr(operation, key, value)
-            
+
         await db.flush()
         await db.refresh(operation)
         logger.info(f"Updated operation {operation_id}")
@@ -64,11 +64,11 @@ class OperationRepository:
         operation = await self.get(db, operation_id)
         if not operation:
             return None
-            
+
         operation.status = new_status
         for key, value in kwargs.items():
             setattr(operation, key, value)
-            
+
         await db.flush()
         await db.refresh(operation)
         logger.info(f"Updated status for operation {operation_id} to {new_status}")

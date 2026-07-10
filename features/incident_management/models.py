@@ -1,8 +1,12 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, DateTime, Enum as SQLEnum, JSON
+
+from sqlalchemy import JSON, Column, DateTime, String
+from sqlalchemy import Enum as SQLEnum
+
+from features.incident_management.domain import IncidentSeverity, IncidentStatus
 from infrastructure.database import Base
-from features.incident_management.domain import IncidentStatus, IncidentSeverity
+
 
 def utc_now():
     return datetime.now(timezone.utc)

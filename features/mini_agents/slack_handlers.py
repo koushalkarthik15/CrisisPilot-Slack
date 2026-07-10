@@ -1,16 +1,15 @@
-import json
 import logging
 from typing import Any, Dict, List
 
 from slack_bolt.async_app import AsyncApp
 from slack_sdk.errors import SlackApiError
 
-from core.services import registry as service_registry
 from core.orchestration.registry import AgentRegistry
+from core.services import registry as service_registry
+from features.mini_agents.exceptions import MiniAgentConfigurationError
+from features.mini_agents.service import MiniAgentManagementService
 from infrastructure.database import get_db_session
 from infrastructure.mcp.registry import MCPRegistry
-from features.mini_agents.service import MiniAgentManagementService
-from features.mini_agents.exceptions import MiniAgentConfigurationError
 
 logger = logging.getLogger("crisispilot.mini_agents.slack_handlers")
 
@@ -141,12 +140,12 @@ def register_mini_agent_handlers(app: AsyncApp) -> None:
     @app.view("create_agent_modal")
     async def handle_create_agent_submission(ack, body, client, view, logger):
         values = view["state"]["values"]
-        
+
         name = values["name_block"]["name_input"]["value"]
         desc = values["desc_block"]["desc_input"]["value"]
         role = values["role_block"]["role_input"]["value"]
         prompt = values["prompt_block"]["prompt_input"]["value"]
-        
+
         selected_options = values["tools_block"]["tools_input"].get("selected_options", [])
         allowed_tools = [opt["value"] for opt in selected_options if opt["value"] != "none"]
 
@@ -163,7 +162,7 @@ def register_mini_agent_handlers(app: AsyncApp) -> None:
             service = await _get_service()
             await service.create_agent(data)
             await service.session.close()
-            
+
             await ack()
             # Send DM confirming creation
             user_id = body["user"]["id"]
@@ -219,7 +218,7 @@ def register_mini_agent_handlers(app: AsyncApp) -> None:
             service = await _get_service()
             success = await service.delete_agent(agent_name)
             await service.session.close()
-            
+
             if success:
                 await respond(f"✅ Mini-Agent `{agent_name}` was successfully deleted.")
             else:
@@ -254,7 +253,7 @@ def register_mini_agent_handlers(app: AsyncApp) -> None:
 
         mcp_registry = service_registry.get(MCPRegistry)
         tool_options = _build_tool_options(mcp_registry)
-        
+
         if not tool_options:
             tool_options = [{"text": {"type": "plain_text", "text": "No tools available"}, "value": "none"}]
 
@@ -318,11 +317,11 @@ def register_mini_agent_handlers(app: AsyncApp) -> None:
     async def handle_edit_agent_submission(ack, body, client, view, logger):
         agent_name = view["private_metadata"]
         values = view["state"]["values"]
-        
+
         desc = values["desc_block"]["desc_input"]["value"]
         role = values["role_block"]["role_input"]["value"]
         prompt = values["prompt_block"]["prompt_input"]["value"]
-        
+
         selected_options = values["tools_block"]["tools_input"].get("selected_options", [])
         allowed_tools = [opt["value"] for opt in selected_options if opt["value"] != "none"]
 
@@ -337,7 +336,7 @@ def register_mini_agent_handlers(app: AsyncApp) -> None:
             service = await _get_service()
             await service.update_agent(agent_name, update_data)
             await service.session.close()
-            
+
             await ack()
             user_id = body["user"]["id"]
             await client.chat_postMessage(channel=user_id, text=f"✅ Mini-Agent `{agent_name}` updated successfully.")

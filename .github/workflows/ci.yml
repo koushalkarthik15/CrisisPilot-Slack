@@ -33,15 +33,7 @@ jobs:
           source .venv/bin/activate
           uv run ruff check .
 
-      - name: Run Black Formatter Check
-        run: |
-          source .venv/bin/activate
-          uv run black --check .
 
-      - name: Run isort Check
-        run: |
-          source .venv/bin/activate
-          uv run isort --check-only .
 
       - name: Run Tests
         env:

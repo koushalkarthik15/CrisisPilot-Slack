@@ -1,6 +1,8 @@
 import logging
-import aiohttp
 from typing import Any, Dict
+
+import aiohttp
+
 from core.config import get_settings
 from infrastructure.mcp.base import BaseTool
 from infrastructure.mcp.models import ToolRequest, ToolResponse
@@ -16,7 +18,7 @@ class NewsAPIProvider:
     async def fetch_news(self, query: str, limit: int = 5) -> Dict[str, Any]:
         if not self.api_key or self.api_key == "your-news-api-key":
             raise ValueError("NEWS_API_KEY is not configured or uses placeholder.")
-            
+
         params = {
             "q": query,
             "apiKey": self.api_key,
@@ -41,11 +43,11 @@ class NewsTool(BaseTool):
     @property
     def name(self) -> str:
         return "news_tool"
-        
+
     @property
     def description(self) -> str:
         return "Searches for recent news articles related to a specific topic or crisis."
-        
+
     @property
     def input_schema(self) -> Dict[str, Any]:
         return {
@@ -69,21 +71,21 @@ class NewsTool(BaseTool):
         limit = request.arguments.get("limit", 3)
         if not query:
             return ToolResponse(is_error=True, content="Missing required argument: 'query'.")
-            
+
         try:
             data = await self.provider.fetch_news(query, limit)
             articles = data.get("articles", [])
-            
+
             if not articles:
                 return ToolResponse(is_error=False, content=f"No recent news found for '{query}'.")
-                
+
             content = f"Recent news for '{query}':\n"
             for i, article in enumerate(articles, 1):
                 title = article.get('title', 'No Title')
                 source = article.get('source', {}).get('name', 'Unknown Source')
                 url = article.get('url', '')
                 content += f"{i}. [{source}] {title}\n   {url}\n"
-                
+
             return ToolResponse(
                 is_error=False,
                 content=content,

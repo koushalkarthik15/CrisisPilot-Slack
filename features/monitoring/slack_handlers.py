@@ -1,17 +1,21 @@
 import logging
-import re
+
 from slack_bolt.async_app import AsyncApp
-from infrastructure.database import get_db_session
+
 from core.services import registry as service_registry
 from core.state import StateManager
-from infrastructure.slack_blocks.monitoring_blocks import build_monitoring_list_blocks, build_monitoring_dashboard_blocks
-from features.monitoring.schemas import MonitoringProfileCreate
 from features.monitoring.domain import MonitoringCategory, MonitoringFrequency
+from features.monitoring.schemas import MonitoringProfileCreate
+from infrastructure.database import get_db_session
+from infrastructure.slack_blocks.monitoring_blocks import (
+    build_monitoring_dashboard_blocks,
+    build_monitoring_list_blocks,
+)
 
 logger = logging.getLogger("crisispilot.monitoring.slack_handlers")
 
 def register_monitoring_handlers(app: AsyncApp) -> None:
-    
+
     @app.command("/monitoring")
     @app.command("/list-monitoring")
     async def list_monitoring_command(ack, body, client):
@@ -19,17 +23,17 @@ def register_monitoring_handlers(app: AsyncApp) -> None:
         channel_id = body.get("channel_id")
         user_id = body.get("user_id")
         logger.info(f"Received /monitoring command from {user_id}")
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
-            
+
             state_manager = service_registry.get(StateManager)
             profiles = await state_manager.monitoring_service.list_active_profiles(session)
-            
+
             blocks = build_monitoring_list_blocks(profiles)
             await client.chat_postMessage(channel=channel_id, text="Active Monitoring Profiles", blocks=blocks)
-            
+
             await session.close()
         except Exception as e:
             logger.error(f"Error listing monitoring profiles: {e}", exc_info=True)
@@ -159,34 +163,34 @@ def register_monitoring_handlers(app: AsyncApp) -> None:
         values = view["state"]["values"]
         channel_id = view["private_metadata"]
         user_id = body["user"]["id"]
-        
+
         name = values["name_block"]["name_input"]["value"]
         region = values["region_block"]["region_input"]["value"]
         category_str = values["category_block"]["category_input"]["selected_option"]["value"]
         template_val = values["template_block"]["template_input"]["value"]
         frequency_str = values["frequency_block"]["frequency_input"]["selected_option"]["value"]
         custom_freq_val = values["custom_freq_block"]["custom_freq_input"]["value"] if "custom_freq_block" in values else None
-        
+
         # Safely parse threshold from static select
         threshold_raw = values["threshold_block"]["threshold_input"]["selected_option"]["value"]
         threshold_val = float(threshold_raw)
-        
+
         notifications_val = values["notifications_block"]["notifications_input"]["value"]
 
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
             state_manager = service_registry.get(StateManager)
-            
+
             # Validate duplicate name before acknowledging
             existing = await state_manager.monitoring_service.repository.get_by_name(session, name)
             if existing:
                 await ack(response_action="errors", errors={"name_block": "A Monitoring Profile with this name already exists. Please choose a different name."})
                 await session.close()
                 return
-                
+
             await ack()
-            
+
             profile_in = MonitoringProfileCreate(
                 name=name,
                 region=region,
@@ -198,42 +202,44 @@ def register_monitoring_handlers(app: AsyncApp) -> None:
                 workflow_template=template_val,
                 description=f"Automated monitoring for {region} ({category_str})"
             )
-            
+
             profile = await state_manager.monitoring_service.create_monitoring_profile(session, state_manager, profile_in, created_by=user_id)
-            
+
             # Fetch missions to show in the start message
             missions = await state_manager.mission_service.repository.list_by_operation(session, profile.operation_id)
             await session.commit()
-            
-            from infrastructure.slack_blocks.monitoring_blocks import build_monitoring_started_blocks
+
+            from infrastructure.slack_blocks.monitoring_blocks import (
+                build_monitoring_started_blocks,
+            )
             blocks = build_monitoring_started_blocks(profile, missions)
-            
+
             await client.chat_postMessage(
                 channel=channel_id,
                 text=f"Monitoring Profile started: {profile.name}",
                 blocks=blocks
             )
-            
+
             await session.close()
         except Exception as e:
             logger.error(f"Error submitting monitoring modal: {e}", exc_info=True)
-            
+
     @app.action("monitoring_view_dashboard")
     async def handle_monitoring_view_dashboard(ack, body, client):
         await ack()
         profile_id = body["actions"][0]["value"]
         channel_id = body["channel"]["id"]
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
             state_manager = service_registry.get(StateManager)
-            
+
             profile = await state_manager.monitoring_service.get_profile(session, profile_id)
             if profile:
                 blocks = build_monitoring_dashboard_blocks(profile)
                 await client.chat_postMessage(channel=channel_id, text=f"Monitoring Dashboard: {profile.name}", blocks=blocks)
-                
+
             await session.close()
         except Exception as e:
             logger.error(f"Error showing monitoring dashboard: {e}", exc_info=True)
@@ -244,11 +250,11 @@ def register_monitoring_handlers(app: AsyncApp) -> None:
         channel_id = body.get("channel_id")
         user_id = body.get("user_id")
         profile_id = command.get("text", "").strip()
-        
+
         if not profile_id:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text="Please provide a monitoring profile ID. Example: `/stop-monitoring MP-1234`")
             return
-            
+
         await _execute_stop_monitoring(client, channel_id, user_id, profile_id)
 
     @app.action("stop_monitoring_action")
@@ -257,23 +263,23 @@ def register_monitoring_handlers(app: AsyncApp) -> None:
         profile_id = body["actions"][0]["value"]
         channel_id = body["channel"]["id"]
         user_id = body["user"]["id"]
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
             state_manager = service_registry.get(StateManager)
-            
+
             from features.monitoring.domain import MonitoringStatus
             await state_manager.monitoring_service.transition_status(session, profile_id, MonitoringStatus.STOPPED)
             await session.commit()
-            
+
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text="Monitoring profile stopped.")
-            
+
             # Refresh Dashboard
             profile = await state_manager.monitoring_service.get_profile(session, profile_id)
             blocks = build_monitoring_dashboard_blocks(profile)
             await client.chat_update(channel=channel_id, ts=body["message"]["ts"], text="Monitoring Dashboard", blocks=blocks)
-            
+
             await session.close()
         except Exception as e:
             logger.error(f"Error stopping monitoring profile {profile_id}: {e}", exc_info=True)
@@ -285,45 +291,47 @@ def register_monitoring_handlers(app: AsyncApp) -> None:
         profile_id = body["actions"][0]["value"]
         channel_id = body["channel"]["id"]
         user_id = body["user"]["id"]
-        
+
         await client.chat_postEphemeral(channel=channel_id, user=user_id, text="Triggering simulated critical scan for demo purposes...")
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
             state_manager = service_registry.get(StateManager)
-            
+
             # Reset risk score so the threshold is crossed again for the demo
             profile = await state_manager.monitoring_service.repository.get(session, profile_id)
             if profile:
                 from features.monitoring.schemas import MonitoringProfileUpdate
                 update_data = MonitoringProfileUpdate(current_risk_score=0.0)
-                
+
                 # Guarantee the channel we are in is a notification target so we can see the results
                 targets = profile.notification_targets or ""
                 if channel_id not in targets:
                     update_data.notification_targets = f"{targets},{channel_id}" if targets else channel_id
-                    
+
                 await state_manager.monitoring_service.repository.update(
                     session, profile_id, update_data
                 )
-                
+
             # Simulate critical observations to trigger the risk threshold
             simulated_observations = [
                 {"type": "WEATHER_ALERT", "severity": 100.0, "detail": "Major flooding detected in primary region. Evacuation recommended."},
                 {"type": "NEWS_REPORT", "severity": 90.0, "detail": "Local infrastructure taking heavy damage from rising water levels."}
             ]
-            
+
             profile = await state_manager.monitoring_service.process_scan_results(
                 session, state_manager, profile_id, simulated_observations
             )
             await session.commit()
-            
+
             # Refresh Dashboard
-            from infrastructure.slack_blocks.monitoring_blocks import build_monitoring_dashboard_blocks
+            from infrastructure.slack_blocks.monitoring_blocks import (
+                build_monitoring_dashboard_blocks,
+            )
             blocks = build_monitoring_dashboard_blocks(profile)
             await client.chat_update(channel=channel_id, ts=body["message"]["ts"], text="Monitoring Dashboard", blocks=blocks)
-            
+
             await session.close()
         except Exception as e:
             logger.error(f"Error simulating scan for profile {profile_id}: {e}", exc_info=True)

@@ -1,5 +1,7 @@
 from typing import Any, Dict, Optional
+
 from pydantic import BaseModel, Field
+
 
 class UsageMetrics(BaseModel):
     """Tracks token consumption for a single request."""

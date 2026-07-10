@@ -35,10 +35,10 @@ class ServiceRegistry:
     def get_health(cls) -> Dict[str, str]:
         """Returns the health status of all registered services."""
         return {
-            interface.__name__: "operational" 
+            interface.__name__: "operational"
             for interface in cls._services.keys()
         }
-        
+
     @classmethod
     def clear(cls) -> None:
         """Clears the registry (useful for testing or shutdown)."""

@@ -1,7 +1,10 @@
 from datetime import datetime
 from typing import List, Optional
+
 from pydantic import BaseModel
+
 from features.recommendations.domain import RecommendationPriority, RecommendationStatus
+
 
 class RecommendationCreate(BaseModel):
     incident_id: Optional[str] = None

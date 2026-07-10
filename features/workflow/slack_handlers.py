@@ -2,16 +2,14 @@ import logging
 
 from slack_bolt.async_app import AsyncApp
 
-from core.services import registry as service_registry
 from core.notifications import NotificationEngine
-from infrastructure.database import get_db_session
-
+from core.services import registry as service_registry
+from features.recommendations.repository import RecommendationRepository
 from features.workflow.domain import DecisionAction
+from features.workflow.repository import AuditRepository
 from features.workflow.schemas import DecisionRequest
 from features.workflow.service import WorkflowService
-from features.workflow.repository import AuditRepository
-
-from features.recommendations.repository import RecommendationRepository
+from infrastructure.database import get_db_session
 
 logger = logging.getLogger("crisispilot.workflow.slack_handlers")
 
@@ -21,26 +19,26 @@ def register_workflow_handlers(app: AsyncApp) -> None:
 
     async def _process_decision(ack, body, client, action: DecisionAction, status_text: str):
         await ack()
-        
+
         user_id = body["user"]["id"]
         recommendation_id = body["actions"][0]["value"]
-        
+
         # Original message info for updating the UI
         channel_id = body["channel"]["id"]
         message_ts = body["message"]["ts"]
         original_blocks = body["message"].get("blocks", [])
-        
+
         try:
             # Inject Services
             session_gen = get_db_session()
             session = await anext(session_gen)
-            
+
             workflow_service = WorkflowService(
                 audit_repository=AuditRepository(),
                 recommendation_repository=RecommendationRepository(),
                 notification_engine=service_registry.get(NotificationEngine)
             )
-            
+
             # 1. Apply Decision
             req = DecisionRequest(
                 recommendation_id=recommendation_id,
@@ -51,7 +49,7 @@ def register_workflow_handlers(app: AsyncApp) -> None:
             await workflow_service.apply_decision(session, req)
             await session.commit()
             await session.close()
-            
+
             # 2. Update the original message to remove the buttons and show the result
             # Assuming the last block is the actions block. We replace it.
             new_blocks = []
@@ -80,14 +78,14 @@ def register_workflow_handlers(app: AsyncApp) -> None:
                         })
                 else:
                     new_blocks.append(block)
-                    
+
             await client.chat_update(
                 channel=channel_id,
                 ts=message_ts,
                 text="Decision recorded.",
                 blocks=new_blocks
             )
-            
+
             # Post to main incident thread
             from core.state import StateManager
             state_manager = service_registry.get(StateManager)
@@ -101,7 +99,7 @@ def register_workflow_handlers(app: AsyncApp) -> None:
                         thread_ts=incident.thread_ts,
                         text=f"{status_text} by <@{user_id}>"
                     )
-            
+
         except Exception as e:
             logger.error(f"Error processing decision {action} for recommendation {recommendation_id}: {e}", exc_info=True)
             # Post ephemeral error
@@ -118,7 +116,7 @@ def register_workflow_handlers(app: AsyncApp) -> None:
         recommendation_id = body["actions"][0]["value"]
         channel_id = body["channel"]["id"]
         message_ts = body["message"]["ts"]
-        
+
         try:
             await client.views_open(
                 trigger_id=body["trigger_id"],
@@ -176,27 +174,27 @@ def register_workflow_handlers(app: AsyncApp) -> None:
         recommendation_id = meta[0]
         channel_id = meta[1]
         message_ts = meta[2]
-        
+
         assignee_id = values["assignee_block"]["assignee_input"]["selected_user"]
         notes = values["notes_block"]["notes_input"]["value"] or ""
-        
+
         try:
             # We must run this async process in the background or await it
             # It's better to await since we have ack()
             # But we must ack first to close modal
             await ack()
-            
+
             user_id = body["user"]["id"]
-            
+
             session_gen = get_db_session()
             session = await anext(session_gen)
-            
+
             workflow_service = WorkflowService(
                 audit_repository=AuditRepository(),
                 recommendation_repository=RecommendationRepository(),
                 notification_engine=service_registry.get(NotificationEngine)
             )
-            
+
             # Apply Decision: ASSIGN
             req = DecisionRequest(
                 recommendation_id=recommendation_id,
@@ -205,7 +203,7 @@ def register_workflow_handlers(app: AsyncApp) -> None:
                 comments=f"Assigned to <@{assignee_id}>. Notes: {notes}"
             )
             await workflow_service.apply_decision(session, req)
-            
+
             # Also update Recommendation entity with assigned_to (this could be done inside apply_decision, but we do it here for now)
             rec = await workflow_service.recommendation_repository.get(session, recommendation_id)
             incident_id = None
@@ -215,13 +213,13 @@ def register_workflow_handlers(app: AsyncApp) -> None:
                 rec.assigned_by = user_id
                 rec.assigned_at = datetime.now(timezone.utc)
                 rec.approved_by = user_id
-                
+
                 # Auto-declare Incident
-                from features.incident_management.service import IncidentService
+                from features.incident_management.domain import IncidentSeverity
                 from features.incident_management.repository import IncidentRepository
                 from features.incident_management.schemas import IncidentCreate
-                from features.incident_management.domain import IncidentSeverity
-                
+                from features.incident_management.service import IncidentService
+
                 incident_svc = IncidentService(repository=IncidentRepository())
                 incident_data = IncidentCreate(
                     title=f"Escalation: {rec.title}",
@@ -232,17 +230,17 @@ def register_workflow_handlers(app: AsyncApp) -> None:
                 )
                 incident = await incident_svc.create_incident(session, incident_data)
                 incident_id = incident.id
-                
+
                 session.add(rec)
-            
+
             await session.commit()
             await session.close()
-            
+
             # Update the original message
             # Fetch message history to get original blocks (Slack view submission doesn't pass message blocks)
             try:
                 history = await client.conversations_history(channel=channel_id, latest=message_ts, limit=1, inclusive=True)
-            except Exception as e:
+            except Exception:
                 # If bot is not in the channel, join it and retry
                 try:
                     await client.conversations_join(channel=channel_id)
@@ -259,7 +257,7 @@ def register_workflow_handlers(app: AsyncApp) -> None:
                         text = f"✅ Approved and Assigned to <@{assignee_id}> by <@{user_id}>"
                         if incident_id:
                             text += f"\n🚨 *Incident `{incident_id}` officially declared.*"
-                            
+
                         new_blocks.append({
                             "type": "context",
                             "elements": [
@@ -271,18 +269,18 @@ def register_workflow_handlers(app: AsyncApp) -> None:
                         })
                     else:
                         new_blocks.append(block)
-                        
+
                 await client.chat_update(
                     channel=channel_id,
                     ts=message_ts,
                     text="Recommendation Assigned",
                     blocks=new_blocks
                 )
-                
+
             # DM Assignee
             dm = await client.conversations_open(users=assignee_id)
             dm_channel = dm["channel"]["id"]
-            
+
             dm_blocks = [
                 {
                     "type": "section",
@@ -310,20 +308,20 @@ def register_workflow_handlers(app: AsyncApp) -> None:
                     ]
                 }
             ]
-            
+
             await client.chat_postMessage(
                 channel=dm_channel,
                 text="You have been assigned a recommendation.",
                 blocks=dm_blocks
             )
-            
+
             # Post threaded reply in DM
             await client.chat_postMessage(
                 channel=channel_id,
                 thread_ts=message_ts,
                 text=f"👤 Recommendation assigned to <@{assignee_id}> by <@{user_id}>"
             )
-            
+
             # Post to main incident thread
             from core.state import StateManager
             state_manager = service_registry.get(StateManager)
@@ -336,7 +334,7 @@ def register_workflow_handlers(app: AsyncApp) -> None:
                         thread_ts=incident.thread_ts,
                         text=f"👤 Recommendation assigned to <@{assignee_id}> by <@{user_id}>\n*Notes:* {notes}"
                     )
-            
+
         except Exception as e:
             logger.error(f"Error handling assign submission: {e}", exc_info=True)
 
@@ -354,7 +352,7 @@ def register_workflow_handlers(app: AsyncApp) -> None:
         recommendation_id = body["actions"][0]["value"]
         message_ts = body["message"]["ts"]
         channel_id = body["channel"]["id"]
-        
+
         session_gen = get_db_session()
         session = await anext(session_gen)
         workflow_service = WorkflowService(
@@ -364,10 +362,10 @@ def register_workflow_handlers(app: AsyncApp) -> None:
         )
         rec = await workflow_service.recommendation_repository.get(session, recommendation_id)
         await session.close()
-        
+
         if not rec:
             return
-            
+
         modal_view = {
             "type": "modal",
             "callback_id": "complete_modal_submission",
@@ -396,7 +394,7 @@ def register_workflow_handlers(app: AsyncApp) -> None:
                 }
             ]
         }
-        
+
         await client.views_open(
             trigger_id=body["trigger_id"],
             view=modal_view
@@ -405,35 +403,35 @@ def register_workflow_handlers(app: AsyncApp) -> None:
     @app.view("complete_modal_submission")
     async def handle_complete_modal_submission(ack, body, client, view):
         await ack()
-        
+
         user_id = body["user"]["id"]
         private_metadata = view["private_metadata"]
         message_ts, channel_id, recommendation_id = private_metadata.split("|")
-        
+
         values = view["state"]["values"]
         notes = values["notes_input"]["notes"]["value"]
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
-            
+
             workflow_service = WorkflowService(
                 audit_repository=AuditRepository(),
                 recommendation_repository=RecommendationRepository(),
                 notification_engine=service_registry.get(NotificationEngine)
             )
-            
+
             req = DecisionRequest(
                 recommendation_id=recommendation_id,
                 reviewer_id=user_id,
                 action=DecisionAction.COMPLETE_EXECUTION,
                 comments=f"Execution completed. Notes: {notes}"
             )
-            
+
             await workflow_service.apply_decision(session, req)
             await session.commit()
             await session.close()
-            
+
             # Update DM Message
             new_blocks = [
                 {
@@ -450,7 +448,7 @@ def register_workflow_handlers(app: AsyncApp) -> None:
                 text="Mission Completed",
                 blocks=new_blocks
             )
-            
+
         except Exception as e:
             logger.error(f"Error handling complete modal submission: {e}", exc_info=True)
 
@@ -463,14 +461,14 @@ def register_workflow_handlers(app: AsyncApp) -> None:
         await ack()
         channel_id = body.get("channel_id")
         user_id = body.get("user_id")
-        
+
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
-            
+
             repo = RecommendationRepository()
             all_recs = await repo.get_all_pending(session)
-            
+
             blocks = [
                 {
                     "type": "header",
@@ -478,12 +476,12 @@ def register_workflow_handlers(app: AsyncApp) -> None:
                 },
                 {"type": "divider"}
             ]
-            
+
             blocks.append({
                 "type": "section",
                 "text": {"type": "mrkdwn", "text": f"Debug Info: Found {len(all_recs)} pending recommendations in total."}
             })
-            
+
             if not all_recs:
                 blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "No pending reviews found."}})
                 await client.chat_postMessage(channel=channel_id, text="Pending Reviews", blocks=blocks)
@@ -494,7 +492,7 @@ def register_workflow_handlers(app: AsyncApp) -> None:
             incident_map = {}
             operation_map = {}
             orphaned = []
-            
+
             for r in all_recs:
                 if r.incident_id:
                     if r.incident_id not in incident_map:
@@ -506,24 +504,25 @@ def register_workflow_handlers(app: AsyncApp) -> None:
                     operation_map[r.operation_id].append(r)
                 else:
                     orphaned.append(r)
-            
+
             # Fetch Incident details
             if incident_map:
                 from sqlalchemy.future import select
+
                 from features.incident_management.models import Incident
-                
+
                 result = await session.execute(
                     select(Incident).where(Incident.id.in_(list(incident_map.keys())))
                 )
                 incidents = {inc.id: inc for inc in result.scalars().all()}
-                
+
                 blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "*Incidents*"}})
-                
+
                 for inc_id, recs in incident_map.items():
                     inc = incidents.get(inc_id)
-                    title = f"*{inc.title}*" if inc else f"*Unknown/Deleted Incident*"
+                    title = f"*{inc.title}*" if inc else "*Unknown/Deleted Incident*"
                     thread_ts = inc.thread_ts if inc else None
-                    
+
                     blocks.append({
                         "type": "section",
                         "text": {"type": "mrkdwn", "text": f"{title}\nID: `{inc_id}` | Pending Reviews: {len(recs)}"},
@@ -546,22 +545,22 @@ def register_workflow_handlers(app: AsyncApp) -> None:
                                 "action_id": "workflow_approve_assign"
                             }
                         })
-            
+
             # Fetch Operation details
             if operation_map:
                 from features.operations.models import Operation
-                
+
                 result = await session.execute(
                     select(Operation).where(Operation.id.in_(list(operation_map.keys())))
                 )
                 ops = {op.id: op for op in result.scalars().all()}
-                
+
                 blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "*Operations*"}})
-                
+
                 for op_id, recs in operation_map.items():
                     op = ops.get(op_id)
-                    title = f"*{op.name}*" if op else f"*Unknown/Deleted Operation*"
-                    
+                    title = f"*{op.name}*" if op else "*Unknown/Deleted Operation*"
+
                     blocks.append({
                         "type": "section",
                         "text": {"type": "mrkdwn", "text": f"{title}\nID: `{op_id}` | Pending Reviews: {len(recs)}"},
@@ -583,7 +582,7 @@ def register_workflow_handlers(app: AsyncApp) -> None:
                                 "action_id": "workflow_approve_assign"
                             }
                         })
-                        
+
             # Orphaned
             if orphaned:
                 blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "*Global / Orphaned Recommendations*"}})
@@ -598,9 +597,9 @@ def register_workflow_handlers(app: AsyncApp) -> None:
                             "action_id": "workflow_approve_assign"
                         }
                     })
-                
+
             await client.chat_postMessage(channel=channel_id, text="Pending Reviews", blocks=blocks)
-            
+
             await session.close()
         except Exception as e:
             logger.error(f"Error listing pending reviews: {e}", exc_info=True)

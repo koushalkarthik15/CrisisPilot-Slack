@@ -1,9 +1,15 @@
 from typing import List
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from shared.repository import BaseRepository
+
 from features.recommendations.models import Recommendation
-from features.recommendations.schemas import RecommendationCreate, RecommendationUpdateStatus
+from features.recommendations.schemas import (
+    RecommendationCreate,
+    RecommendationUpdateStatus,
+)
+from shared.repository import BaseRepository
+
 
 class RecommendationRepository(BaseRepository[Recommendation, RecommendationCreate, RecommendationUpdateStatus]):
     def __init__(self):
@@ -29,29 +35,31 @@ class RecommendationRepository(BaseRepository[Recommendation, RecommendationCrea
 
     async def get_pending_entities(self, db: AsyncSession):
         """Fetches distinct incident and operation IDs that have pending recommendations."""
+        from sqlalchemy import String, cast
+
         from features.recommendations.domain import RecommendationStatus
-        from sqlalchemy import distinct, cast, String
-        
+
         result = await db.execute(
             select(
-                self.model.incident_id, 
+                self.model.incident_id,
                 self.model.operation_id
             ).filter(cast(self.model.status, String).in_([RecommendationStatus.PENDING_APPROVAL.name, "Pending Approval", "PENDING_REVIEW"]))
         )
-        
+
         incident_ids = set()
         operation_ids = set()
-        
+
         for row in result:
-            if row[0]: 
+            if row[0]:
                 incident_ids.add(row[0])
-            elif row[1]: 
+            elif row[1]:
                 operation_ids.add(row[1])
-                
+
         return list(incident_ids), list(operation_ids)
-        
+
     async def get_orphaned_pending(self, db: AsyncSession):
-        from sqlalchemy import cast, String
+        from sqlalchemy import String, cast
+
         from features.recommendations.domain import RecommendationStatus
         result = await db.execute(
             select(self.model)
@@ -62,7 +70,8 @@ class RecommendationRepository(BaseRepository[Recommendation, RecommendationCrea
         return list(result.scalars().all())
 
     async def get_all_pending(self, db: AsyncSession):
-        from sqlalchemy import cast, String
+        from sqlalchemy import String, cast
+
         from features.recommendations.domain import RecommendationStatus
         result = await db.execute(
             select(self.model)

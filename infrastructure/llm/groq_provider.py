@@ -1,16 +1,24 @@
 import logging
 from typing import Optional
-from groq import AsyncGroq, APIError, APIConnectionError, RateLimitError, AuthenticationError
+
+from groq import (
+    APIConnectionError,
+    APIError,
+    AsyncGroq,
+    AuthenticationError,
+    RateLimitError,
+)
+
 from core.config import get_settings
 from core.llm.base import BaseLLMProvider
-from core.llm.models import LLMRequest, LLMResponse, UsageMetrics
 from core.llm.exceptions import (
-    LLMProviderError,
     LLMAuthenticationError,
+    LLMProviderError,
+    LLMRateLimitError,
     LLMTimeoutError,
-    LLMRateLimitError
 )
 from core.llm.guardrails import UsageGuardrail
+from core.llm.models import LLMRequest, LLMResponse, UsageMetrics
 
 logger = logging.getLogger("crisispilot.llm.groq")
 
@@ -29,7 +37,7 @@ class GroqProvider(BaseLLMProvider):
         logger.info("Initializing Groq Provider...")
         if not self.settings.GROQ_API_KEY:
             raise LLMAuthenticationError("GROQ_API_KEY is not configured.")
-        
+
         # We explicitly inject the API key and enforce a default timeout (e.g., 30s)
         self.client = AsyncGroq(
             api_key=self.settings.GROQ_API_KEY,
@@ -59,7 +67,7 @@ class GroqProvider(BaseLLMProvider):
     async def generate(self, request: LLMRequest) -> LLMResponse:
         if not self.client:
             raise LLMProviderError("Provider is not initialized.")
-            
+
         logger.debug("Running guardrail checks...")
         # 1. Enforce Guardrails Before Execution
         await self.guardrail.check_before_execution()
@@ -69,7 +77,7 @@ class GroqProvider(BaseLLMProvider):
             messages = []
             if request.system_prompt:
                 messages.append({"role": "system", "content": request.system_prompt})
-            
+
             messages.append({"role": "user", "content": request.prompt})
 
             # 3. Execute Request
@@ -88,7 +96,7 @@ class GroqProvider(BaseLLMProvider):
             # 4. Normalize Response
             content = response.choices[0].message.content or ""
             usage = response.usage
-            
+
             metrics = UsageMetrics(
                 input_tokens=usage.prompt_tokens if usage else 0,
                 output_tokens=usage.completion_tokens if usage else 0,

@@ -1,6 +1,5 @@
 import logging
 
-from core.errors import ToolExecutionError
 from infrastructure.mcp.models import ToolRequest, ToolResponse
 from infrastructure.mcp.registry import MCPRegistry
 
@@ -30,7 +29,7 @@ class MCPExecutor:
         Executes a requested tool using the `_safe_execute` boundary.
         """
         logger.debug(f"MCP Executor received request for tool: {request.name}")
-        
+
         try:
             tool = self.registry.get_tool(request.name)
             # The tool itself handles safe execution and error wrapping

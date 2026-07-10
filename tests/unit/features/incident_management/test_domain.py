@@ -1,5 +1,9 @@
-import pytest
-from features.incident_management.domain import IncidentStatus, IncidentSeverity, ALLOWED_TRANSITIONS
+from features.incident_management.domain import (
+    ALLOWED_TRANSITIONS,
+    IncidentSeverity,
+    IncidentStatus,
+)
+
 
 def test_incident_status_enum():
     assert IncidentStatus.DRAFT.value == "Draft"

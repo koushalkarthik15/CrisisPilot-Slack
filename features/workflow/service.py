@@ -1,17 +1,21 @@
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Any
+from typing import TYPE_CHECKING, Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from features.workflow.domain import DecisionAction, WorkflowEventPayload, DecisionStatus
-from features.workflow.schemas import DecisionRequest, AuditRecordCreate
-from features.workflow.repository import AuditRepository
-from features.workflow.exceptions import InvalidDecisionTransitionError
-from features.recommendations.repository import RecommendationRepository
-from features.recommendations.schemas import RecommendationUpdateStatus
 from features.recommendations.domain import RecommendationStatus
 from features.recommendations.exceptions import RecommendationNotFoundError
-from typing import TYPE_CHECKING
+from features.recommendations.repository import RecommendationRepository
+from features.recommendations.schemas import RecommendationUpdateStatus
+from features.workflow.domain import (
+    DecisionAction,
+    DecisionStatus,
+    WorkflowEventPayload,
+)
+from features.workflow.exceptions import InvalidDecisionTransitionError
+from features.workflow.repository import AuditRepository
+from features.workflow.schemas import AuditRecordCreate, DecisionRequest
 
 if TYPE_CHECKING:
     from core.notifications import NotificationEngine
@@ -24,8 +28,8 @@ class WorkflowService:
     Enforces state transitions, updates recommendation status through the persistence layer,
     records the immutable audit trail, and triggers notification hooks.
     """
-    def __init__(self, 
-                 audit_repository: AuditRepository, 
+    def __init__(self,
+                 audit_repository: AuditRepository,
                  recommendation_repository: RecommendationRepository,
                  notification_engine: 'NotificationEngine'):
         self.audit_repository = audit_repository
@@ -57,14 +61,14 @@ class WorkflowService:
         4. Trigger Notification Hook
         """
         logger.info(f"Processing decision {request.action.value} on recommendation {request.recommendation_id}")
-        
+
         # 1. Fetch Recommendation
         rec = await self.recommendation_repository.get(db, request.recommendation_id)
         if not rec:
             raise RecommendationNotFoundError(f"Recommendation {request.recommendation_id} not found.")
 
         current_status = rec.status
-        
+
         # 2. Validate workflow transition
         # Only allow transitions from valid previous states
         valid_transitions = {
@@ -74,13 +78,13 @@ class WorkflowService:
             DecisionAction.START_EXECUTION: [RecommendationStatus.ASSIGNED],
             DecisionAction.COMPLETE_EXECUTION: [RecommendationStatus.IN_PROGRESS],
         }
-        
+
         allowed_states = valid_transitions.get(request.action, [])
         if current_status not in allowed_states:
             raise InvalidDecisionTransitionError(action=request.action.value, current_status=current_status.value)
-            
+
         new_status = self._map_action_to_status(request.action)
-        
+
         # 3. Persist Recommendation Status
         # We manually update fields on rec if needed, or pass them in obj_in
         update_schema = RecommendationUpdateStatus(
@@ -89,7 +93,7 @@ class WorkflowService:
             reviewed_at=datetime.now(timezone.utc) if request.action in [DecisionAction.APPROVE, DecisionAction.REJECT] else rec.reviewed_at
         )
         updated_rec = await self.recommendation_repository.update(db, db_obj=rec, obj_in=update_schema)
-        
+
         # 4. Persist Audit Record
         audit_schema = AuditRecordCreate(
             recommendation_id=request.recommendation_id,
@@ -100,7 +104,7 @@ class WorkflowService:
             comments=request.comments
         )
         audit_record = await self.audit_repository.create(db, obj_in=audit_schema)
-        
+
         # 5. Trigger Notification Hook
         event_payload = WorkflowEventPayload(
             recommendation_id=request.recommendation_id,
@@ -110,9 +114,9 @@ class WorkflowService:
             comments=request.comments
         )
         await self.notification_engine.publish_workflow_event(event_payload)
-        
+
         return audit_record
-        
+
     async def log_incident_action(self, db: AsyncSession, incident_id: str, user_id: str, action: DecisionAction, previous_status: str, new_status: str, comments: str = None):
         """Records an incident lifecycle event in the audit trail."""
         audit_schema = AuditRecordCreate(

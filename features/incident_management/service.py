@@ -1,12 +1,16 @@
 import logging
 from typing import Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from features.incident_management.domain import ALLOWED_TRANSITIONS, IncidentStatus
-from features.incident_management.exceptions import InvalidStateTransitionError, IncidentNotFoundError
+from features.incident_management.exceptions import (
+    IncidentNotFoundError,
+    InvalidStateTransitionError,
+)
 from features.incident_management.models import Incident
-from features.incident_management.schemas import IncidentCreate, IncidentUpdate
 from features.incident_management.repository import IncidentRepository
+from features.incident_management.schemas import IncidentCreate, IncidentUpdate
 
 logger = logging.getLogger("crisispilot.incident_management.service")
 
@@ -33,7 +37,7 @@ class IncidentService:
         incident = await self.get_incident(db, incident_id)
         if not incident:
             raise IncidentNotFoundError(f"Incident {incident_id} not found.")
-        
+
         logger.info(f"Updating incident {incident_id}")
         return await self.repository.update(db, db_obj=incident, obj_in=obj_in)
 
@@ -48,7 +52,7 @@ class IncidentService:
 
         current_status = incident.status
         allowed_next = ALLOWED_TRANSITIONS.get(current_status, set())
-        
+
         if new_status not in allowed_next:
             logger.warning(f"Illegal transition attempted: {current_status} -> {new_status} for incident {incident_id}")
             raise InvalidStateTransitionError(current_status=current_status, target_status=new_status)
@@ -75,7 +79,7 @@ class IncidentService:
             parent = await self.get_incident(db, parent_id)
             if not parent:
                 raise IncidentNotFoundError(f"Parent incident {parent_id} not found.")
-            
+
         incident = await self.transition_status(db, incident_id, IncidentStatus.DUPLICATE)
         incident.parent_id = parent_id
         db.add(incident)

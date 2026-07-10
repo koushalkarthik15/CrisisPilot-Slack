@@ -6,48 +6,52 @@ from fastapi.responses import JSONResponse
 
 from core.config import get_settings
 from core.errors import CrisisPilotError, ServiceInitializationError
+from core.llm.guardrails import UsageGuardrail
 from core.notifications import NotificationEngine
 from core.orchestration.registry import AgentRegistry
 from core.orchestration.supervisor import SupervisorAgent
-from core.services import ServiceRegistry, registry
-from infrastructure.mcp.registry import MCPRegistry
-from infrastructure.mcp.executor import MCPExecutor
-from infrastructure.mcp.diagnostic import EchoTool
-from infrastructure.mcp.tools import WeatherTool, NewsTool, MapsTool, InventoryTool
+from core.services import registry
 from core.state import StateManager
-from infrastructure.database import close_db, init_db
-from infrastructure.logger import setup_logging
-from infrastructure.slack_integration import close_slack, init_slack, slack_app
-from features.watchlists.monitor import NewsMonitorCoordinator
 from features.analytics.scheduler import SummaryDigestScheduler
-from core.llm.guardrails import UsageGuardrail
-from infrastructure.llm.groq_provider import GroqProvider
-from features.recommendations.intelligence import IncidentIntelligenceService, IncidentDomainEnum
-from features.recommendations.router import RecommendationRouter
-from features.recommendations.providers.cybersecurity import CybersecurityProvider
-from features.recommendations.providers.weather import WeatherProvider
-from features.recommendations.providers.natural_disaster import NaturalDisasterProvider
-from features.recommendations.providers.public_health import PublicHealthProvider
-from features.recommendations.providers.infrastructure import InfrastructureProvider
-from features.recommendations.providers.transportation import TransportationProvider
-from features.recommendations.providers.industrial import IndustrialProvider
-from features.recommendations.providers.humanitarian import HumanitarianProvider
-from features.recommendations.providers.environmental import EnvironmentalProvider
-from features.recommendations.providers.generic import GenericProvider
-from features.operations import OperationRepository, OperationService
-from features.missions import MissionRepository, MissionService
-from features.workflows import (
-    WorkflowRepository as OperationalWorkflowRepository,
-    WorkflowService as OperationalWorkflowService
-)
-from features.timeline import TimelineRepository, TimelineService
 from features.evidence import EvidenceRepository, EvidenceService
-from features.monitoring.repository import MonitoringRepository
+from features.mission_execution import (
+    MissionExecutionEngine,
+    MissionScheduler,
+    StrategyRegistry,
+)
+from features.missions import MissionRepository, MissionService
 from features.monitoring.evaluator import SituationEvaluator
 from features.monitoring.notification_policy import NotificationPolicyEngine
+from features.monitoring.repository import MonitoringRepository
 from features.monitoring.service import MonitoringService
-from features.mission_execution import MissionExecutionEngine, MissionScheduler, StrategyRegistry
-from core.orchestration.supervisor import SupervisorAgent
+from features.operations import OperationRepository, OperationService
+from features.recommendations.intelligence import (
+    IncidentDomainEnum,
+    IncidentIntelligenceService,
+)
+from features.recommendations.providers.cybersecurity import CybersecurityProvider
+from features.recommendations.providers.environmental import EnvironmentalProvider
+from features.recommendations.providers.generic import GenericProvider
+from features.recommendations.providers.humanitarian import HumanitarianProvider
+from features.recommendations.providers.industrial import IndustrialProvider
+from features.recommendations.providers.infrastructure import InfrastructureProvider
+from features.recommendations.providers.natural_disaster import NaturalDisasterProvider
+from features.recommendations.providers.public_health import PublicHealthProvider
+from features.recommendations.providers.transportation import TransportationProvider
+from features.recommendations.providers.weather import WeatherProvider
+from features.recommendations.router import RecommendationRouter
+from features.timeline import TimelineRepository, TimelineService
+from features.watchlists.monitor import NewsMonitorCoordinator
+from features.workflows import WorkflowRepository as OperationalWorkflowRepository
+from features.workflows import WorkflowService as OperationalWorkflowService
+from infrastructure.database import close_db, init_db
+from infrastructure.llm.groq_provider import GroqProvider
+from infrastructure.logger import setup_logging
+from infrastructure.mcp.diagnostic import EchoTool
+from infrastructure.mcp.executor import MCPExecutor
+from infrastructure.mcp.registry import MCPRegistry
+from infrastructure.mcp.tools import InventoryTool, MapsTool, NewsTool, WeatherTool
+from infrastructure.slack_integration import close_slack, init_slack, slack_app
 
 logger = logging.getLogger("crisispilot")
 
@@ -61,24 +65,24 @@ async def lifespan(app: FastAPI):
     try:
         # Initialize logging foundation first
         setup_logging()
-        
+
         # Load centralized configuration
         settings = get_settings()
         logger.info(f"Starting CrisisPilot in {settings.APP_ENV} mode")
-        
+
         # 1. Initialize persistence layer
         await init_db()
-        
+
         # 2. Initialize Slack Platform
         await init_slack()
-        
+
         # 3. Initialize Core Runtime Services
         logger.info("Bootstrapping core runtime services...")
-        
+
         notification_engine = NotificationEngine(slack_client=slack_app.client)
         await notification_engine.initialize()
         registry.register(NotificationEngine, notification_engine)
-        
+
         # Guardrails (MetricsProvider)
         guardrail = UsageGuardrail()
         registry.register(UsageGuardrail, guardrail)
@@ -89,7 +93,7 @@ async def lifespan(app: FastAPI):
         await llm_provider.initialize()
         from core.llm.base import BaseLLMProvider
         registry.register(BaseLLMProvider, llm_provider)
-        
+
         intelligence_service = IncidentIntelligenceService(llm_provider)
         registry.register(IncidentIntelligenceService, intelligence_service)
 
@@ -133,7 +137,7 @@ async def lifespan(app: FastAPI):
         registry.register(TimelineRepository, timeline_repository)
         timeline_service = TimelineService(repository=timeline_repository)
         registry.register(TimelineService, timeline_service)
-        
+
         # Register Evidence Subsystem
         logger.info("Bootstrapping Evidence Subsystem...")
         evidence_repository = EvidenceRepository()
@@ -157,34 +161,34 @@ async def lifespan(app: FastAPI):
         agent_registry = AgentRegistry()
         await agent_registry.initialize()
         registry.register(AgentRegistry, agent_registry)
-        
+
         supervisor_agent = SupervisorAgent(registry=agent_registry)
         await supervisor_agent.initialize()
         registry.register(SupervisorAgent, supervisor_agent)
         logger.info("Orchestration foundation successfully bootstrapped.")
-        
+
         # 5. Initialize MCP Platform Foundation
         logger.info("Bootstrapping MCP platform foundation...")
         mcp_registry = MCPRegistry()
         await mcp_registry.initialize()
-        
+
         # Register the diagnostic tool for pipeline validation
         diagnostic_tool = EchoTool()
         mcp_registry.register(diagnostic_tool)
-        
+
         # Register Core MCP Tool Suite
         mcp_registry.register(WeatherTool())
         mcp_registry.register(NewsTool())
         mcp_registry.register(MapsTool())
         mcp_registry.register(InventoryTool())
-        
+
         registry.register(MCPRegistry, mcp_registry)
-        
+
         mcp_executor = MCPExecutor(registry=mcp_registry)
         await mcp_executor.initialize()
         registry.register(MCPExecutor, mcp_executor)
         logger.info("MCP platform foundation successfully bootstrapped.")
-        
+
         # Load persisted Mini-Agents into Agent Registry
         logger.info("Loading persisted Mini-Agents...")
         from features.mini_agents.service import MiniAgentManagementService
@@ -206,51 +210,51 @@ async def lifespan(app: FastAPI):
         supervisor_agent = registry.get(SupervisorAgent) # Make sure this gets resolved correctly
         mission_engine = MissionExecutionEngine(supervisor=supervisor_agent)
         registry.register(MissionExecutionEngine, mission_engine)
-        
+
         strategy_registry = StrategyRegistry()
         registry.register(StrategyRegistry, strategy_registry)
-        
+
         mission_scheduler = MissionScheduler(engine=mission_engine, strategy_registry=strategy_registry)
         registry.register(MissionScheduler, mission_scheduler)
 
         state_manager = StateManager()
         await state_manager.initialize()
         registry.register(StateManager, state_manager)
-        
+
         logger.info("Core runtime services successfully bootstrapped.")
-        
+
         # 6. Start Background Tasks
         logger.info("Starting background services...")
         monitor_coordinator = NewsMonitorCoordinator()
         await monitor_coordinator.start()
         registry.register(NewsMonitorCoordinator, monitor_coordinator)
-        
+
         digest_scheduler = SummaryDigestScheduler()
         await digest_scheduler.start()
         registry.register(SummaryDigestScheduler, digest_scheduler)
-        
+
         from features.mission_execution.runner import MissionSchedulerBackgroundRunner
         mission_background_runner = MissionSchedulerBackgroundRunner(interval_seconds=30)
         await mission_background_runner.start()
         registry.register(MissionSchedulerBackgroundRunner, mission_background_runner)
-        
+
     except Exception as e:
         logger.error(f"CRITICAL STARTUP ERROR: {e}")
         raise RuntimeError("Failed to bootstrap CrisisPilot") from e
-    
+
     yield
-    
+
     try:
         # Graceful shutdowns in reverse order
         logger.info("Initiating graceful shutdown sequence...")
-        
+
         try:
             try:
                 digest_scheduler = registry.get(SummaryDigestScheduler)
                 await digest_scheduler.stop()
             except ServiceInitializationError:
                 pass
-                
+
             try:
                 monitor_coordinator = registry.get(NewsMonitorCoordinator)
                 await monitor_coordinator.stop()
@@ -258,7 +262,9 @@ async def lifespan(app: FastAPI):
                 pass
 
             try:
-                from features.mission_execution.runner import MissionSchedulerBackgroundRunner
+                from features.mission_execution.runner import (
+                    MissionSchedulerBackgroundRunner,
+                )
                 mission_background_runner = registry.get(MissionSchedulerBackgroundRunner)
                 await mission_background_runner.stop()
             except ServiceInitializationError:
@@ -266,22 +272,22 @@ async def lifespan(app: FastAPI):
 
             mcp_executor = registry.get(MCPExecutor)
             await mcp_executor.shutdown()
-            
+
             mcp_registry = registry.get(MCPRegistry)
             await mcp_registry.shutdown()
-            
+
             supervisor_agent = registry.get(SupervisorAgent)
             await supervisor_agent.shutdown()
-            
+
             agent_registry = registry.get(AgentRegistry)
             await agent_registry.shutdown()
-            
+
             notification_engine = registry.get(NotificationEngine)
             await notification_engine.shutdown()
-            
+
             state_manager = registry.get(StateManager)
             await state_manager.shutdown()
-            
+
             registry.clear()
         except ServiceInitializationError:
             logger.warning("Services were not fully initialized; skipping service teardown.")
@@ -315,7 +321,7 @@ async def crisispilot_exception_handler(request: Request, exc: CrisisPilotError)
 async def health_check():
     """Health check endpoint to verify the API and runtime services are running."""
     services_health = registry.get_health()
-    
+
     return {
         "status": "ok",
         "environment": get_settings().APP_ENV,

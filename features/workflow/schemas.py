@@ -1,7 +1,10 @@
 from datetime import datetime
 from typing import Optional
+
 from pydantic import BaseModel
+
 from features.workflow.domain import DecisionAction
+
 
 class DecisionRequest(BaseModel):
     recommendation_id: str

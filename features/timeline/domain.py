@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class TimelineEventType(str, Enum):
     LIFECYCLE_CHANGE = "LIFECYCLE_CHANGE"
     HUMAN_ACTION = "HUMAN_ACTION"
@@ -18,7 +19,7 @@ class TimelineEventSource(str, Enum):
     USER = "User"
     SCHEDULER = "Scheduler"
     SYSTEM = "System"
-    
+
 class TimelineEventSeverity(str, Enum):
     INFO = "INFO"
     WARNING = "WARNING"

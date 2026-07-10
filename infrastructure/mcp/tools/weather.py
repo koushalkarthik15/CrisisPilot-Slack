@@ -1,6 +1,8 @@
 import logging
-import aiohttp
 from typing import Any, Dict
+
+import aiohttp
+
 from core.config import get_settings
 from infrastructure.mcp.base import BaseTool
 from infrastructure.mcp.models import ToolRequest, ToolResponse
@@ -16,7 +18,7 @@ class OpenWeatherProvider:
     async def get_weather(self, location: str) -> Dict[str, Any]:
         if not self.api_key:
             raise ValueError("OPENWEATHER_API_KEY is not configured.")
-            
+
         params = {
             "q": location,
             "appid": self.api_key,
@@ -40,11 +42,11 @@ class WeatherTool(BaseTool):
     @property
     def name(self) -> str:
         return "weather_tool"
-        
+
     @property
     def description(self) -> str:
         return "Fetches current weather conditions for a specified location."
-        
+
     @property
     def input_schema(self) -> Dict[str, Any]:
         return {
@@ -65,16 +67,16 @@ class WeatherTool(BaseTool):
                 is_error=True,
                 content="Missing required argument: 'location'."
             )
-            
+
         try:
             data = await self.provider.get_weather(location)
-            
+
             # Normalize response
             temp = data.get("main", {}).get("temp")
             condition = data.get("weather", [{}])[0].get("description", "Unknown")
             humidity = data.get("main", {}).get("humidity")
             wind_speed = data.get("wind", {}).get("speed")
-            
+
             content = (
                 f"Weather in {location}:\n"
                 f"- Condition: {condition}\n"
@@ -82,7 +84,7 @@ class WeatherTool(BaseTool):
                 f"- Humidity: {humidity}%\n"
                 f"- Wind Speed: {wind_speed} m/s"
             )
-            
+
             return ToolResponse(
                 is_error=False,
                 content=content,

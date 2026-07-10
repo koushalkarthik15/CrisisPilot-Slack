@@ -31,18 +31,19 @@ AsyncSessionLocal = async_sessionmaker(
 Base = declarative_base()
 
 # Import models to ensure they are registered with the declarative Base
-import features.incident_management.models  # noqa: F401
-import features.recommendations.models  # noqa: F401
-import features.workflow.models  # noqa: F401
-import features.mini_agents.models  # noqa: F401
-import features.watchlists.models  # noqa: F401
-import features.operations.models  # noqa: F401
-import features.missions.models  # noqa: F401
-import features.workflows.models  # noqa: F401
-import features.timeline.models  # noqa: F401
-import features.evidence.models  # noqa: F401
-import features.monitoring.models  # noqa: F401
 from sqlalchemy import text
+
+import features.evidence.models  # noqa: F401
+import features.incident_management.models  # noqa: F401
+import features.mini_agents.models  # noqa: F401
+import features.missions.models  # noqa: F401
+import features.monitoring.models  # noqa: F401
+import features.operations.models  # noqa: F401
+import features.recommendations.models  # noqa: F401
+import features.timeline.models  # noqa: F401
+import features.watchlists.models  # noqa: F401
+import features.workflow.models  # noqa: F401
+import features.workflows.models  # noqa: F401
 
 MIGRATIONS = [
     {
@@ -107,10 +108,10 @@ async def run_migrations(conn):
     await conn.execute(text(
         "CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY)"
     ))
-    
+
     result = await conn.execute(text("SELECT MAX(version) FROM schema_migrations"))
     current_version = result.scalar() or 0
-    
+
     for migration in MIGRATIONS:
         if migration["version"] > current_version:
             logger.info(f"Applying migration version {migration['version']}...")

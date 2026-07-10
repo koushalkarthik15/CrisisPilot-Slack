@@ -1,10 +1,13 @@
 from typing import Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from shared.repository import BaseRepository
+
+from features.incident_management.domain import IncidentStatus
 from features.incident_management.models import Incident
 from features.incident_management.schemas import IncidentCreate, IncidentUpdate
-from features.incident_management.domain import IncidentStatus
+from shared.repository import BaseRepository
+
 
 class IncidentRepository(BaseRepository[Incident, IncidentCreate, IncidentUpdate]):
     def __init__(self):

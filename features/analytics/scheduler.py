@@ -3,12 +3,12 @@ import logging
 from typing import Optional
 
 from core.config import get_settings
-from infrastructure.database import AsyncSessionLocal
-from core.services import registry
-from core.notifications import NotificationEngine
 from core.llm.guardrails import UsageGuardrail
-from features.analytics.service import AnalyticsService
+from core.notifications import NotificationEngine
+from core.services import registry
 from features.analytics.formatter import format_operational_summary_blocks
+from features.analytics.service import AnalyticsService
+from infrastructure.database import AsyncSessionLocal
 
 logger = logging.getLogger("crisispilot.analytics.scheduler")
 
@@ -29,7 +29,7 @@ class SummaryDigestScheduler:
         if not self.enabled:
             logger.info("SummaryDigestScheduler is disabled via configuration.")
             return
-            
+
         if self._task is not None:
             logger.warning("SummaryDigestScheduler is already running.")
             return
@@ -45,14 +45,14 @@ class SummaryDigestScheduler:
 
         logger.info("Stopping SummaryDigestScheduler...")
         self._stop_event.set()
-        
+
         try:
             await asyncio.wait_for(self._task, timeout=5.0)
         except asyncio.TimeoutError:
             self._task.cancel()
         except asyncio.CancelledError:
             pass
-            
+
         self._task = None
         logger.info("SummaryDigestScheduler stopped.")
 
@@ -70,7 +70,7 @@ class SummaryDigestScheduler:
                         svc = AnalyticsService(metrics_provider)
                         summary = await svc.get_operational_summary(session)
                         blocks = format_operational_summary_blocks(summary)
-                        
+
                         notification_engine = registry.get(NotificationEngine)
                         await notification_engine.publish_operational_summary(blocks, self.channel_id)
                         logger.info("Scheduled Operational Summary Digest published.")

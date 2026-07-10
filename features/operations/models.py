@@ -1,8 +1,16 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, DateTime, Enum as SQLEnum
+
+from sqlalchemy import Column, DateTime, String
+from sqlalchemy import Enum as SQLEnum
+
+from features.operations.domain import (
+    OperationCategory,
+    OperationPriority,
+    OperationStatus,
+)
 from infrastructure.database import Base
-from features.operations.domain import OperationStatus, OperationCategory, OperationPriority
+
 
 def utc_now():
     return datetime.now(timezone.utc)
@@ -17,7 +25,7 @@ class Operation(Base):
     status = Column(SQLEnum(OperationStatus), nullable=False, default=OperationStatus.PLANNED)
     priority = Column(SQLEnum(OperationPriority), nullable=False, default=OperationPriority.MEDIUM)
     created_by = Column(String, nullable=True)
-    
+
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
     started_at = Column(DateTime(timezone=True), nullable=True)

@@ -1,8 +1,10 @@
 from datetime import datetime
-from typing import Optional, Any, Dict
+from typing import Any, Dict, Optional
+
 from pydantic import BaseModel, Field
 
 from features.evidence.domain import EvidenceType
+
 
 class EvidenceBase(BaseModel):
     title: str = Field(..., description="Title of the evidence")
@@ -36,6 +38,6 @@ class EvidenceRead(EvidenceBase):
     workflow_id: Optional[str]
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True

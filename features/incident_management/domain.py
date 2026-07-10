@@ -1,5 +1,6 @@
 from enum import Enum
-from typing import Dict, List, Set
+from typing import Dict, Set
+
 
 class IncidentStatus(str, Enum):
     DRAFT = "Draft"

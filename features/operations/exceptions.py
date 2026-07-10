@@ -1,5 +1,6 @@
 from core.errors import CrisisPilotError
 
+
 class OperationNotFoundError(CrisisPilotError):
     """Raised when an operation cannot be found."""
     def __init__(self, operation_id: str):

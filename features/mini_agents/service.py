@@ -4,11 +4,11 @@ from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.orchestration.registry import AgentRegistry
-from infrastructure.mcp.registry import MCPRegistry
+from features.mini_agents.exceptions import MiniAgentConfigurationError
+from features.mini_agents.factory import MiniAgentFactory
 from features.mini_agents.models import MiniAgentModel
 from features.mini_agents.repository import MiniAgentRepository
-from features.mini_agents.factory import MiniAgentFactory
-from features.mini_agents.exceptions import MiniAgentConfigurationError
+from infrastructure.mcp.registry import MCPRegistry
 
 logger = logging.getLogger("crisispilot.mini_agents.service")
 
@@ -41,7 +41,7 @@ class MiniAgentManagementService:
         """Fetches all enabled agents from DB and registers them into memory."""
         logger.info("Loading persisted Mini-Agents into memory...")
         agents = await self.repository.get_all(enabled_only=True)
-        
+
         for model in agents:
             try:
                 # We skip re-validation of tools here assuming they were valid at creation.
@@ -56,7 +56,7 @@ class MiniAgentManagementService:
         name = data.get("name")
         if not name:
             raise MiniAgentConfigurationError("Agent must have a name.")
-            
+
         existing = await self.repository.get_by_name(name)
         if existing:
             raise MiniAgentConfigurationError(f"Agent with name '{name}' already exists.")
@@ -67,14 +67,14 @@ class MiniAgentManagementService:
         model = MiniAgentModel(**data)
         created_model = await self.repository.create(model)
         await self.session.commit()
-        
+
         logger.info(f"Persisted new Mini-Agent: {name}")
 
         if created_model.is_enabled:
             agent_instance = MiniAgentFactory.create_agent(created_model)
             await agent_instance.initialize()
             self.agent_registry.register(agent_instance)
-            
+
         return created_model
 
     async def update_agent(self, name: str, data: dict) -> Optional[MiniAgentModel]:
@@ -88,12 +88,12 @@ class MiniAgentManagementService:
 
         updated_model = await self.repository.update(name, data)
         await self.session.commit()
-        
+
         logger.info(f"Updated persisted Mini-Agent: {name}")
 
         # Sync runtime memory
         self.agent_registry.deregister(name)
-        
+
         if updated_model.is_enabled:
             agent_instance = MiniAgentFactory.create_agent(updated_model)
             await agent_instance.initialize()
@@ -109,9 +109,9 @@ class MiniAgentManagementService:
 
         deleted = await self.repository.delete(name)
         await self.session.commit()
-        
+
         if deleted:
             logger.info(f"Deleted persisted Mini-Agent: {name}")
             self.agent_registry.deregister(name)
-            
+
         return deleted

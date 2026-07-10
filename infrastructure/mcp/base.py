@@ -2,7 +2,6 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict
 
-from core.errors import ToolExecutionError
 from infrastructure.mcp.models import ToolRequest, ToolResponse
 
 logger = logging.getLogger("crisispilot.mcp")
@@ -14,19 +13,19 @@ class BaseTool(ABC):
     This abstraction ensures the rest of the application remains agnostic
     to the specific underlying MCP SDK implementation.
     """
-    
+
     @property
     @abstractmethod
     def name(self) -> str:
         """The unique name of the tool."""
         pass
-        
+
     @property
     @abstractmethod
     def description(self) -> str:
         """A detailed description of what the tool does and when to use it."""
         pass
-        
+
     @property
     @abstractmethod
     def input_schema(self) -> Dict[str, Any]:

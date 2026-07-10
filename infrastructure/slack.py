@@ -49,16 +49,16 @@ async def log_request(
 async def init_slack() -> None:
     """Connects to Slack via Socket Mode in the background."""
     global handler
-    
+
     if not settings.SLACK_BOT_TOKEN or not settings.SLACK_APP_TOKEN:
         logger.error("Missing Slack tokens. Cannot start Slack Socket Mode.")
         return
 
     logger.info("Connecting to Slack via Socket Mode...")
-    
+
     # Initialize the handler here where the asyncio event loop is running
     handler = AsyncSocketModeHandler(slack_app, settings.SLACK_APP_TOKEN)
-    
+
     # Start Socket Mode in the background so it doesn't block FastAPI startup
     asyncio.create_task(handler.start_async())
     logger.info("Slack Socket Mode connection initiated.")

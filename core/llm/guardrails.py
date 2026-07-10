@@ -2,6 +2,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime, timezone
+
 from core.config import get_settings
 from core.llm.exceptions import LLMGuardrailError
 from core.llm.models import UsageMetrics
@@ -17,15 +18,15 @@ class UsageGuardrail(MetricsProvider):
     def __init__(self):
         self.settings = get_settings()
         self.lock = asyncio.Lock()
-        
+
         # State tracking
         self.current_day = datetime.now(timezone.utc).date()
         self.requests_today = 0
         self.tokens_today = 0
-        
+
         # Sliding window for requests per minute
         self.request_timestamps = []
-        
+
         self.concurrent_requests = 0
 
     async def _reset_if_new_day(self):

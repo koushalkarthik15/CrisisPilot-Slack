@@ -1,6 +1,7 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
 from functools import lru_cache
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -18,7 +19,7 @@ class Settings(BaseSettings):
     # Application settings
     APP_ENV: str = Field(default="development")
     LOG_LEVEL: str = Field(default="INFO")
-    
+
     # Slack Configuration
     SLACK_BOT_TOKEN: str = Field(default="")
     SLACK_SIGNING_SECRET: str = Field(default="")
@@ -27,7 +28,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = Field(default="")
     NEWS_API_KEY: str = Field(default="")
     OPENWEATHER_API_KEY: str = Field(default="")
-    
+
     # Watchlist Monitoring
     NEWS_POLLING_INTERVAL_SECONDS: int = Field(default=300)
 
@@ -40,10 +41,10 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = Field(default="")
     GROQ_MODEL: str = Field(default="llama-3.3-70b-versatile")
     LLM_PROVIDER: str = Field(default="groq")
-    
+
     # LLM Usage Guardrails
     LLM_GUARDRAILS_ENABLED: bool = Field(default=True)
-    
+
     # Hit-In-The-Loop Workflow
     HITL_WORKFLOW_ENABLED: bool = Field(default=True)
     RECOMMENDATION_CONFIDENCE_THRESHOLD: float = Field(default=0.60)
