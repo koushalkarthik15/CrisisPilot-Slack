@@ -61,6 +61,7 @@ def register_slack_handlers(app: AsyncApp) -> None:
         val = body["actions"][0]["value"]
         entity_type, entity_id = val.split("_", 1)
         channel_id = body["channel"]["id"]
+        message_ts = body.get("message", {}).get("ts", "")
 
         try:
             options = []
@@ -86,7 +87,7 @@ def register_slack_handlers(app: AsyncApp) -> None:
                 view={
                     "type": "modal",
                     "callback_id": "global_update_status_modal",
-                    "private_metadata": f"{channel_id}|{entity_type}|{entity_id}",
+                    "private_metadata": f"{channel_id}|{entity_type}|{entity_id}|{message_ts}",
                     "title": {"type": "plain_text", "text": "Update Status"},
                     "submit": {"type": "plain_text", "text": "Update"},
                     "close": {"type": "plain_text", "text": "Cancel"},
@@ -115,6 +116,7 @@ def register_slack_handlers(app: AsyncApp) -> None:
         channel_id = meta[0]
         entity_type = meta[1]
         entity_id = meta[2]
+        message_ts = meta[3] if len(meta) > 3 and meta[3] else None
 
         status_str = values["status_block"]["status_input"]["selected_option"]["value"]
 
@@ -138,7 +140,13 @@ def register_slack_handlers(app: AsyncApp) -> None:
                 updated = await state_manager.transition_mission_status(session, entity_id, new_status)
                 await session.commit()
                 blocks = build_mission_detail_blocks(updated)
-                await client.chat_postMessage(channel=channel_id, text=f"Mission status updated: {updated.name}", blocks=blocks)
+                if message_ts:
+                    try:
+                        await client.chat_update(channel=channel_id, ts=message_ts, text=f"Mission status updated: {updated.name}", blocks=blocks)
+                    except Exception as e:
+                        logger.warning(f"Could not update original message: {e}")
+                else:
+                    await client.chat_postMessage(channel=channel_id, text=f"Mission status updated: {updated.name}", blocks=blocks)
 
             elif entity_type == "operation":
                 from features.operations.domain import OperationStatus
@@ -149,7 +157,13 @@ def register_slack_handlers(app: AsyncApp) -> None:
                 updated = await state_manager.transition_operation_status(session, entity_id, new_status)
                 await session.commit()
                 blocks = build_operation_detail_blocks(updated)
-                await client.chat_postMessage(channel=channel_id, text=f"Operation status updated: {updated.name}", blocks=blocks)
+                if message_ts:
+                    try:
+                        await client.chat_update(channel=channel_id, ts=message_ts, text=f"Operation status updated: {updated.name}", blocks=blocks)
+                    except Exception as e:
+                        logger.warning(f"Could not update original message: {e}")
+                else:
+                    await client.chat_postMessage(channel=channel_id, text=f"Operation status updated: {updated.name}", blocks=blocks)
 
             elif entity_type == "workflow":
                 from features.workflows.domain import WorkflowStatus
@@ -160,15 +174,32 @@ def register_slack_handlers(app: AsyncApp) -> None:
                 updated = await state_manager.transition_operational_workflow_status(session, entity_id, new_status)
                 await session.commit()
                 blocks = build_workflow_detail_blocks(updated)
-                await client.chat_postMessage(channel=channel_id, text=f"Workflow status updated: {updated.name}", blocks=blocks)
+                if message_ts:
+                    try:
+                        await client.chat_update(channel=channel_id, ts=message_ts, text=f"Workflow status updated: {updated.name}", blocks=blocks)
+                    except Exception as e:
+                        logger.warning(f"Could not update original message: {e}")
+                else:
+                    await client.chat_postMessage(channel=channel_id, text=f"Workflow status updated: {updated.name}", blocks=blocks)
 
             elif entity_type == "incident":
+                from infrastructure.slack_blocks.incident_blocks import (
+                    build_incident_detail_blocks,
+                )
+
                 from features.incident_management.domain import IncidentStatus
                 new_status = IncidentStatus[status_str]
                 user_id = body["user"]["id"]
                 updated = await state_manager.transition_incident_status(session, entity_id, new_status, user_id)
                 await session.commit()
-                await client.chat_postMessage(channel=channel_id, text=f"Incident `{entity_id}` status updated to {new_status.name}")
+                blocks = build_incident_detail_blocks(updated)
+                if message_ts:
+                    try:
+                        await client.chat_update(channel=channel_id, ts=message_ts, text=f"Incident status updated: {updated.name}", blocks=blocks)
+                    except Exception as e:
+                        logger.warning(f"Could not update original message: {e}")
+                else:
+                    await client.chat_postMessage(channel=channel_id, text=f"Incident status updated: {updated.name}", blocks=blocks)
 
             await session.close()
         except Exception as e:

@@ -91,9 +91,11 @@ def register_operational_workflow_handlers(app: AsyncApp) -> None:
     @app.action("workflow_advance")
     async def handle_workflow_advance_action(ack, body, client):
         await ack()
+        channel_id = body["channel"]["id"]
         val = body["actions"][0]["value"]
         workflow_id = val.split("_")[1]
-        channel_id = body["channel"]["id"]
+
+        message_ts = body.get("message", {}).get("ts")
         user_id = body["user"]["id"]
 
         try:
@@ -110,6 +112,12 @@ def register_operational_workflow_handlers(app: AsyncApp) -> None:
 
             blocks = build_workflow_detail_blocks(workflow)
             await client.chat_update(channel=channel_id, ts=ts, text=f"Workflow Advanced: {workflow.name}", blocks=blocks)
+
+            if message_ts:
+                try:
+                    await client.chat_update(channel=channel_id, ts=message_ts, text=f"Workflow Dashboard: {workflow.name}", blocks=blocks)
+                except Exception as e:
+                    logger.warning(f"Could not update original workflow message: {e}")
 
             await session.close()
         except Exception as e:

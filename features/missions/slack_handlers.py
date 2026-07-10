@@ -160,6 +160,8 @@ def register_mission_handlers(app: AsyncApp) -> None:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text="Please provide a mission ID. Example: `/assign-mission MS-123`")
             return
 
+        message_ts = body.get("message", {}).get("ts", "")
+
         try:
             agent_registry = service_registry.get(AgentRegistry)
             agents = agent_registry.list_agents()
@@ -174,7 +176,7 @@ def register_mission_handlers(app: AsyncApp) -> None:
                 view={
                     "type": "modal",
                     "callback_id": "assign_mission_modal",
-                    "private_metadata": f"{channel_id}|{mission_id}",
+                    "private_metadata": f"{channel_id}|{mission_id}|{message_ts}",
                     "title": {"type": "plain_text", "text": "Assign Mission"},
                     "submit": {"type": "plain_text", "text": "Assign"},
                     "close": {"type": "plain_text", "text": "Cancel"},
@@ -214,6 +216,7 @@ def register_mission_handlers(app: AsyncApp) -> None:
         meta = view["private_metadata"].split("|")
         channel_id = meta[0]
         mission_id = meta[1]
+        message_ts = meta[2] if len(meta) > 2 and meta[2] else None
         user_id = body["user"]["id"]
 
         human_ids = values.get("human_block", {}).get("human_input", {}).get("selected_users", [])
@@ -236,7 +239,13 @@ def register_mission_handlers(app: AsyncApp) -> None:
 
             if mission:
                 blocks = build_mission_detail_blocks(mission)
-                await client.chat_postMessage(channel=channel_id, text=f"Mission assigned: {mission.name}", blocks=blocks)
+                if message_ts:
+                    try:
+                        await client.chat_update(channel=channel_id, ts=message_ts, text=f"Mission assigned: {mission.name}", blocks=blocks)
+                    except Exception as e:
+                        logger.warning(f"Could not update original message: {e}")
+                else:
+                    await client.chat_postMessage(channel=channel_id, text=f"Mission assigned: {mission.name}", blocks=blocks)
 
                 # Notify assigned humans via DM
                 if human_ids:
@@ -264,6 +273,7 @@ def register_mission_handlers(app: AsyncApp) -> None:
         val = body["actions"][0]["value"]
         mission_id = val.split("_")[1]
         channel_id = body["channel"]["id"]
+        message_ts = body.get("message", {}).get("ts", "")
 
         try:
             agent_registry = service_registry.get(AgentRegistry)
@@ -425,9 +435,11 @@ def register_mission_handlers(app: AsyncApp) -> None:
         val = body["actions"][0]["value"]
         mission_id = val.split("_")[1]
 
-        await _execute_mission(client, channel_id, mission_id)
+        message_ts = body.get("message", {}).get("ts")
 
-    async def _execute_mission(client, channel_id, mission_id):
+        await _execute_mission(client, channel_id, mission_id, original_ts=message_ts)
+
+    async def _execute_mission(client, channel_id, mission_id, original_ts=None):
         try:
             session_gen = get_db_session()
             session = await anext(session_gen)
@@ -445,6 +457,12 @@ def register_mission_handlers(app: AsyncApp) -> None:
 
             # Update the loading message
             await client.chat_update(channel=channel_id, ts=ts, text=f"Mission execution completed: {mission.name}", blocks=blocks)
+
+            if original_ts:
+                try:
+                    await client.chat_update(channel=channel_id, ts=original_ts, text=f"Mission Dashboard: {mission.name}", blocks=blocks)
+                except Exception as update_err:
+                    logger.warning(f"Could not update original mission message: {update_err}")
 
             await session.close()
         except Exception as e:
