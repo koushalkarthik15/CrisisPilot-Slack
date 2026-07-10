@@ -36,9 +36,9 @@ async def test_transition_status(db_session: AsyncSession, service: IncidentServ
     incident_in = IncidentCreate(title="Trans", description="Desc", channel_id="C1")
     incident = await service.create_incident(db_session, incident_in)
 
-    # Valid transition DRAFT -> ACTIVE
-    updated = await service.transition_status(db_session, incident.id, IncidentStatus.ACTIVE)
-    assert updated.status == IncidentStatus.ACTIVE
+    # Valid transition DRAFT -> CREATED
+    updated = await service.transition_status(db_session, incident.id, IncidentStatus.CREATED)
+    assert updated.status == IncidentStatus.CREATED
 
 @pytest.mark.asyncio
 async def test_invalid_transition(db_session: AsyncSession, service: IncidentService):

@@ -15,7 +15,8 @@ async def test_monitoring_provisioning_flow(db_session: AsyncSession, state_mana
     # Create the Monitoring Profile
     profile_in = MonitoringProfileCreate(
         name="Global Cyber Watch",
-        target_type=TargetType.GLOBAL,
+        target_type=TargetType.REGION,
+        region="Global",
         monitoring_category=MonitoringCategory.CYBERSECURITY,
         channel_id="C_CYBER",
         risk_threshold=8.5
@@ -34,18 +35,18 @@ async def test_monitoring_provisioning_flow(db_session: AsyncSession, state_mana
     assert "Monitoring:" in operation.name
 
     # Verify Operational Workflow was provisioned
-    workflows = await state_manager.operational_workflow_service.repository.get_by_operation_id(db_session, operation.id)
+    workflows = await state_manager.operational_workflow_service.repository.list_by_operation(db_session, operation.id)
     assert len(workflows) == 1
     assert workflows[0].name == "CYBERSECURITY_RESPONSE_WORKFLOW"
 
     # Verify Missions were provisioned based on category
-    missions = await state_manager.mission_service.repository.get_by_operation_id(db_session, operation.id)
+    missions = await state_manager.mission_service.repository.list_by_operation(db_session, operation.id)
     assert len(missions) > 0
     mission_names = [m.name for m in missions]
     assert any("Threat Intel" in name for name in mission_names)
 
     # Verify Timeline Event was logged
-    events = await state_manager.timeline_service.repository.get_by_operation(db_session, operation.id)
+    events = await state_manager.timeline_service.repository.list_by_operation(db_session, operation.id)
     # 1 for operation creation/provisioning + missions created
     assert len(events) >= 1
     lifecycle_events = [e for e in events if "Monitoring Profile 'Global Cyber Watch' started" in e.description]

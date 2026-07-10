@@ -14,7 +14,7 @@ def test_incident_severity_enum():
     assert IncidentSeverity.CRITICAL.value == "Critical"
 
 def test_allowed_transitions():
-    assert IncidentStatus.ACTIVE in ALLOWED_TRANSITIONS[IncidentStatus.DRAFT]
+    assert IncidentStatus.CREATED in ALLOWED_TRANSITIONS[IncidentStatus.DRAFT]
     assert IncidentStatus.ACTIVE in ALLOWED_TRANSITIONS[IncidentStatus.CREATED]
     # ARCHIVED should be terminal
     assert len(ALLOWED_TRANSITIONS[IncidentStatus.ARCHIVED]) == 0

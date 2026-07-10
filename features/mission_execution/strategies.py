@@ -47,7 +47,7 @@ class StrategyRegistry:
     """Registry mapping ExecutionStrategy to StrategyHandlers."""
 
     def __init__(self):
-        self._handlers = {
+        self._handlers: dict[ExecutionStrategy, BaseStrategyHandler] = {
             ExecutionStrategy.MANUAL: ManualExecutionHandler(),
             ExecutionStrategy.SCHEDULED: ScheduledExecutionHandler(),
             ExecutionStrategy.EVENT_DRIVEN: UnsupportedExecutionHandler(ExecutionStrategy.EVENT_DRIVEN.value),
@@ -64,3 +64,6 @@ class StrategyRegistry:
             logger.error(f"Unknown strategy {strategy}")
             raise UnsupportedExecutionStrategyError(strategy.value if hasattr(strategy, "value") else str(strategy))
         return handler
+
+    def register(self, strategy: ExecutionStrategy, handler: BaseStrategyHandler):
+        self._handlers[strategy] = handler

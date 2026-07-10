@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from features.workflows.domain import (
     WorkflowPriority,
@@ -39,5 +39,4 @@ class WorkflowRead(WorkflowBase):
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

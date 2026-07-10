@@ -30,6 +30,14 @@ class MockNotificationEngine(NotificationEngine):
         })
         return {"ok": True, "ts": "1234.5678"}
 
+    async def dispatch_message(self, channel_id, text, blocks=None, thread_ts=None):
+        """Called by NotificationPolicyEngine — records as a sent notification."""
+        self.notifications_sent.append({
+            "channel_id": channel_id,
+            "message": text
+        })
+        return {"ok": True, "ts": "1234.5678"}
+
 class MockRecommendationService:
     def __init__(self):
         self.repository = type("MockRepo", (), {})()
@@ -43,6 +51,34 @@ class MockMissionExecutionEngine:
     pass
 
 class MockMissionScheduler:
+    def __init__(self):
+        from features.mission_execution.strategies import StrategyRegistry
+        from features.missions.domain import ExecutionStrategy, MissionStatus
+        self.strategy_registry = StrategyRegistry()
+        self._ExecutionStrategy = ExecutionStrategy
+        self._MissionStatus = MissionStatus
+
+    async def run_tick(self, db, state_manager):
+        """Runs one scheduler tick using the strategy registry (mirrors real MissionScheduler)."""
+        from features.mission_execution.engine import MissionExecutionEngine
+        ExecutionStrategy = self._ExecutionStrategy
+        MissionStatus = self._MissionStatus
+        eligible = await state_manager.mission_service.repository.list_eligible_for_execution(
+            db,
+            strategy=ExecutionStrategy.SCHEDULED.value,
+            statuses=[MissionStatus.SCHEDULED]
+        )
+        dummy_engine = MissionExecutionEngine.__new__(MissionExecutionEngine)
+        for mission in eligible:
+            try:
+                handler = self.strategy_registry.get_handler(mission.strategy)
+                await handler.execute(db, state_manager, dummy_engine, mission)
+            except Exception as e:
+                import logging
+                logging.getLogger("crisispilot.mock_scheduler").error(
+                    f"Failed to execute mission {mission.id} during scheduler tick: {e}"
+                )
+
     async def dispatch_manual(self, db, state_manager, mission_id):
         pass
 
@@ -88,6 +124,16 @@ async def state_manager(db_session: AsyncSession) -> StateManager:
     from features.mission_execution import MissionExecutionEngine, MissionScheduler
     registry.register(MissionExecutionEngine, MockMissionExecutionEngine())
     registry.register(MissionScheduler, MockMissionScheduler())
+
+    from features.recommendations.intelligence import IncidentIntelligenceService
+    class MockIncidentIntelligenceService:
+        pass
+    registry.register(IncidentIntelligenceService, MockIncidentIntelligenceService())
+
+    from features.recommendations.router import RecommendationRouter
+    class MockRecommendationRouter:
+        pass
+    registry.register(RecommendationRouter, MockRecommendationRouter())
 
     sm = StateManager()
     sm.recommendation_service = MockRecommendationService()

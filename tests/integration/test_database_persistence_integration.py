@@ -2,6 +2,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.state import StateManager
+from features.evidence.domain import EvidenceType
 from features.evidence.schemas import EvidenceCreate
 from features.missions.schemas import MissionCreate
 from features.monitoring.domain import MonitoringCategory, TargetType
@@ -64,7 +65,7 @@ async def test_database_persistence_integration(db_session: AsyncSession, state_
 
     # 4. Create Timeline Event
     event_create = TimelineEventCreate(
-        event_type=TimelineEventType.EVIDENCE_COLLECTED,
+        event_type=TimelineEventType.EVIDENCE_SUBMITTED,
         source=TimelineEventSource.USER,
         severity=TimelineEventSeverity.INFO,
         description="Found some intel",
@@ -81,8 +82,10 @@ async def test_database_persistence_integration(db_session: AsyncSession, state_
     # 5. Create Evidence
     ev_create = EvidenceCreate(
         operation_id=operation.id,
+        title="Weather Map",
         description="Screenshot of weather map",
-        source="Weather API"
+        source="Weather API",
+        evidence_type=EvidenceType.TEXT
     )
     evidence = await state_manager.create_evidence(db_session, ev_create, user_id="U123")
     assert evidence.id is not None

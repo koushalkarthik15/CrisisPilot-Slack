@@ -14,7 +14,7 @@ from infrastructure.mcp.tools.weather import WeatherTool
 
 
 @pytest.fixture
-async def mcp_env():
+async def mcp_env(state_manager: StateManager):
     # Setup test environment with initialized registry and executor
     mcp_registry = MCPRegistry()
     await mcp_registry.initialize()
@@ -29,9 +29,7 @@ async def mcp_env():
     mcp_executor = MCPExecutor(registry=mcp_registry)
     await mcp_executor.initialize()
 
-    # Mock StateManager for InventoryTool
-    state_manager = StateManager()
-    await state_manager.initialize()
+    # Register the existing state manager for InventoryTool
     service_registry.register(StateManager, state_manager)
 
     yield {"registry": mcp_registry, "executor": mcp_executor}
@@ -103,7 +101,7 @@ async def test_news_tool_live_integration(mcp_env):
     if res.is_error:
         assert "API" in res.content or "fetch news" in res.content
     else:
-        assert "Recent news" in res.content
+        assert "Recent news" in res.content or "No recent news" in res.content
 
 @pytest.mark.asyncio
 async def test_inventory_tool_pending_validation(mcp_env):

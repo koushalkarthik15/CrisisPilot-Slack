@@ -4,21 +4,21 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.state import StateManager
-from features.mission_execution.strategies import BaseExecutionHandler
+from features.mission_execution.strategies import BaseStrategyHandler
 from features.missions.domain import ExecutionStrategy, MissionStatus
 from features.monitoring.domain import MonitoringCategory, MonitoringStatus, TargetType
 from features.monitoring.schemas import MonitoringProfileCreate
 
 
-class MockFailingHandler(BaseExecutionHandler):
+class MockFailingHandler(BaseStrategyHandler):
     """A mock handler that raises an exception to simulate failure."""
     async def execute(self, db: AsyncSession, state_manager: Any, engine: Any, mission: Any):
         raise RuntimeError(f"Simulated execution failure for mission {mission.id}")
 
-class MockSucceedingHandler(BaseExecutionHandler):
+class MockSucceedingHandler(BaseStrategyHandler):
     """A mock handler that completes the mission."""
     async def execute(self, db: AsyncSession, state_manager: Any, engine: Any, mission: Any):
-        await state_manager.transition_mission_status(db, mission.id, MissionStatus.ACTIVE)
+        await state_manager.transition_mission_status(db, mission.id, MissionStatus.RUNNING)
         # Simulate doing some work...
         await state_manager.transition_mission_status(db, mission.id, MissionStatus.COMPLETED)
 
@@ -30,7 +30,7 @@ async def test_scheduler_sustained_execution_and_stability(db_session: AsyncSess
     and verifies that there is no runaway growth in queued missions.
     """
     # Override strategy handler for testing in the state manager's registry
-    state_manager.mission_scheduler.strategy_registry.register(ExecutionStrategy.SCHEDULED.value, MockSucceedingHandler())
+    state_manager.mission_scheduler.strategy_registry.register(ExecutionStrategy.SCHEDULED, MockSucceedingHandler())
 
     profiles = []
 
@@ -40,7 +40,7 @@ async def test_scheduler_sustained_execution_and_stability(db_session: AsyncSess
             name=f"Perf Watch {i}",
             target_type=TargetType.REGION,
             region=f"Region {i}",
-            monitoring_category=MonitoringCategory.NATURAL_DISASTER,
+            monitoring_category=MonitoringCategory.FLOOD,
             channel_id=f"C_PERF_{i}",
             risk_threshold=7.0
         )
@@ -56,10 +56,14 @@ async def test_scheduler_sustained_execution_and_stability(db_session: AsyncSess
         # Step A: In an active system, profiles might spawn new missions on a schedule.
         # Since we don't have a live crontab here, we'll manually reset missions to SCHEDULED
         # to simulate them becoming due for execution again (periodic execution).
-        missions = await state_manager.mission_service.repository.get_all(db_session)
+        profile_op_ids = [str(p.operation_id) for p in profiles]
+        all_missions = []
+        for op_id in profile_op_ids:
+            ms = await state_manager.mission_service.repository.list_by_operation(db_session, op_id)
+            all_missions.extend(ms)
+        missions = all_missions
         for m in missions:
-            m.status = MissionStatus.SCHEDULED
-            db_session.add(m)
+            await state_manager.mission_service.repository.update_status(db_session, str(m.id), MissionStatus.SCHEDULED)
         await db_session.commit()
 
         # Step B: Run the scheduler tick
@@ -67,7 +71,12 @@ async def test_scheduler_sustained_execution_and_stability(db_session: AsyncSess
 
         # Step C: Verify Execution Status
         # After the tick, all eligible missions should be picked up and processed (to COMPLETED by our Mock handler)
-        post_tick_missions = await state_manager.mission_service.repository.get_all(db_session)
+        profile_op_ids = [str(p.operation_id) for p in profiles]
+        all_post_tick = []
+        for op_id in profile_op_ids:
+            ms = await state_manager.mission_service.repository.list_by_operation(db_session, op_id)
+            all_post_tick.extend(ms)
+        post_tick_missions = all_post_tick
 
         pending_missions = [m for m in post_tick_missions if m.status == MissionStatus.SCHEDULED]
 
@@ -78,11 +87,12 @@ async def test_scheduler_sustained_execution_and_stability(db_session: AsyncSess
     # Resolve an incident tied to the first profile's operation (simulate an incident was created and resolved)
     profile_to_test = profiles[0]
     # In a real system, the profile remains active. Let's explicitly check it.
-    retrieved_profile = await state_manager.monitoring_service.get_profile(db_session, profile_to_test.id)
+    retrieved_profile = await state_manager.monitoring_service.get_profile(db_session, str(profile_to_test.id))
+    assert retrieved_profile is not None
     assert retrieved_profile.status == MonitoringStatus.ACTIVE
 
     # Prove that the profile's missions still run after 5 ticks
-    final_missions = await state_manager.mission_service.repository.get_by_operation_id(db_session, profile_to_test.operation_id)
+    final_missions = await state_manager.mission_service.repository.list_by_operation(db_session, str(profile_to_test.operation_id))
     assert all(m.status == MissionStatus.COMPLETED for m in final_missions)
 
 @pytest.mark.asyncio
@@ -92,7 +102,7 @@ async def test_scheduler_failure_recovery(db_session: AsyncSession, state_manage
     without failing the entire tick or halting execution of other missions.
     """
     # Register failing handler
-    state_manager.mission_scheduler.strategy_registry.register(ExecutionStrategy.SCHEDULED.value, MockFailingHandler())
+    state_manager.mission_scheduler.strategy_registry.register(ExecutionStrategy.SCHEDULED, MockFailingHandler())
 
     # Provision 1 profile with multiple missions
     profile_in = MonitoringProfileCreate(
@@ -107,10 +117,13 @@ async def test_scheduler_failure_recovery(db_session: AsyncSession, state_manage
         db_session, state_manager, profile_in, created_by="U_TEST"
     )
 
-    # Pre-tick: Missions are SCHEDULED
-    missions = await state_manager.mission_service.repository.get_by_operation_id(db_session, profile.operation_id)
-    assert all(m.status == MissionStatus.SCHEDULED for m in missions)
-    assert len(missions) > 1  # Category Flood spawns 3 missions
+    # Pre-tick: Missions are CREATED (monitoring provisioner creates them with CREATED status)
+    missions = await state_manager.mission_service.repository.list_by_operation(db_session, str(profile.operation_id))
+    assert len(missions) > 1  # Category Flood spawns multiple missions
+    # Manually set missions to SCHEDULED so the scheduler tick picks them up
+    for m in missions:
+        await state_manager.mission_service.repository.update_status(db_session, str(m.id), MissionStatus.SCHEDULED)
+    await db_session.commit()
 
     # Run the tick. It should catch exceptions and not crash.
     await state_manager.run_mission_scheduler_tick(db_session)

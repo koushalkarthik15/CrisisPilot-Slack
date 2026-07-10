@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from features.timeline.domain import (
     TimelineEventSeverity,
@@ -33,5 +33,4 @@ class TimelineEventRead(TimelineEventBase):
     workflow_id: Optional[str]
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
