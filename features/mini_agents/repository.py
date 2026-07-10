@@ -21,7 +21,7 @@ class MiniAgentRepository:
     async def get_all(self, enabled_only: bool = False) -> List[MiniAgentModel]:
         stmt = select(MiniAgentModel)
         if enabled_only:
-            stmt = stmt.where(MiniAgentModel.is_enabled == True)
+            stmt = stmt.where(MiniAgentModel.is_enabled.is_(True))
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 

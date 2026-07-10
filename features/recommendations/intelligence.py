@@ -49,10 +49,10 @@ class IncidentIntelligenceService:
 
         prompt = f"""
         Classify the following incident and output ONLY valid JSON matching the schema below.
-        
+
         Incident Title: {incident_title}
         Incident Description: {incident_description}
-        
+
         JSON Schema:
         {json.dumps(schema_json, indent=2)}
         """

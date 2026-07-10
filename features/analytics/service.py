@@ -128,7 +128,7 @@ class AnalyticsService:
         )
 
         # 3. Watchlist Metrics
-        enabled_wl_res = await db.execute(select(func.count(Watchlist.id)).filter(Watchlist.enabled == True))
+        enabled_wl_res = await db.execute(select(func.count(Watchlist.id)).filter(Watchlist.enabled.is_(True)))
         total_enabled = enabled_wl_res.scalar() or 0
 
         articles_res = await db.execute(select(func.count(WatchlistArticle.id)))
@@ -143,7 +143,7 @@ class AnalyticsService:
         total_agents_res = await db.execute(select(func.count(MiniAgentModel.id)))
         total_registered = total_agents_res.scalar() or 0
 
-        enabled_agents_res = await db.execute(select(func.count(MiniAgentModel.id)).filter(MiniAgentModel.is_enabled == True))
+        enabled_agents_res = await db.execute(select(func.count(MiniAgentModel.id)).filter(MiniAgentModel.is_enabled.is_(True)))
         total_enabled_agents = enabled_agents_res.scalar() or 0
 
         mini_agent_metrics = MiniAgentMetrics(

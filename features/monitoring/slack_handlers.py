@@ -255,7 +255,20 @@ def register_monitoring_handlers(app: AsyncApp) -> None:
             await client.chat_postEphemeral(channel=channel_id, user=user_id, text="Please provide a monitoring profile ID. Example: `/stop-monitoring MP-1234`")
             return
 
-        await _execute_stop_monitoring(client, channel_id, user_id, profile_id)
+        try:
+            session_gen = get_db_session()
+            session = await anext(session_gen)
+            state_manager = service_registry.get(StateManager)
+
+            from features.monitoring.domain import MonitoringStatus
+            await state_manager.monitoring_service.transition_status(session, profile_id, MonitoringStatus.STOPPED)
+            await session.commit()
+
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"Monitoring profile {profile_id} stopped.")
+            await session.close()
+        except Exception as e:
+            logger.error(f"Error stopping monitoring profile {profile_id}: {e}", exc_info=True)
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=f"Failed to stop monitoring profile: {e}")
 
     @app.action("stop_monitoring_action")
     async def handle_stop_monitoring_action(ack, body, client):

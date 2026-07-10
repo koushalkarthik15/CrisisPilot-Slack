@@ -18,7 +18,7 @@ class WatchlistRepository(BaseRepository[Watchlist, WatchlistCreate, WatchlistUp
         super().__init__(Watchlist)
 
     async def get_enabled_watchlists(self, db: AsyncSession) -> List[Watchlist]:
-        result = await db.execute(select(self.model).filter(self.model.enabled == True))
+        result = await db.execute(select(self.model).filter(self.model.enabled.is_(True)))
         return list(result.scalars().all())
 
 class WatchlistArticleRepository(BaseRepository[WatchlistArticle, WatchlistArticleCreate, WatchlistArticleCreate]):
