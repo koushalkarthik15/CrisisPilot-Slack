@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.orchestration.models import AgentRequest, ExecutionContext
 from core.orchestration.supervisor import SupervisorAgent
 from features.mission_execution.exceptions import (
-    AgentResolutionError,
     MissionExecutionError,
 )
 from features.missions.domain import MissionStatus
@@ -41,10 +40,15 @@ class MissionExecutionEngine:
 
         agent_name = mission.assigned_mini_agent_id
         if not agent_name:
-            error_msg = f"Mission {mission.id} has no assigned Mini-Agent."
-            logger.error(error_msg)
-            await self._fail_mission(db, state_manager, mission, error_msg)
-            raise AgentResolutionError("None")
+            # Manual execution without an assigned AI agent just completes the mission immediately
+            mission = await state_manager.mission_service.transition_status(db, mission.id, MissionStatus.COMPLETED)
+            await self._record_timeline(
+                db, state_manager, mission,
+                TimelineEventType.LIFECYCLE_CHANGE,
+                f"Mission '{mission.name}' completed manually (no AI agent assigned).",
+                TimelineEventSeverity.INFO
+            )
+            return mission
 
         await self._record_timeline(
             db, state_manager, mission,
