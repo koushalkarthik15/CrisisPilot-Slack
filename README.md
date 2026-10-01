@@ -1,149 +1,125 @@
 # CrisisPilot
 
-CrisisPilot is an autonomous, Slack-native AI operations center designed to continuously monitor external events, manage active operations, execute intelligent missions, and orchestrate incident response directly where teams collaborate.
+CrisisPilot is a Slack-native autonomous multi-agent operations platform. It enables incident management, operations tracking, and autonomous mission execution directly within Slack, powered by Large Language Models (LLMs).
 
-Built with a domain-driven architectural approach, CrisisPilot transcends traditional incident management by operating as an **Active Operations Platform**—continuously scanning for threats, evaluating situations, and recommending actions before they become full-blown crises.
+## Project Overview
 
----
+CrisisPilot integrates deeply with Slack, using autonomous agents to evaluate situations, monitor watchlists, and recommend or execute strategic missions. The platform uses a FastAPI backend with a SQLite database, leveraging LangGraph, the Model Context Protocol (MCP), and Groq's LLMs for intelligent, automated assistance.
 
 ## Key Features
 
-- **Continuous Monitoring & Auto-Provisioning**: Create Monitoring Profiles (e.g., "Hurricane Watch") that automatically provision Operations, Workflows, and Missions.
-- **Mission Scheduler Engine**: Autonomous background task execution for data gathering, intelligence analysis, and system reporting.
-- **Intelligent Risk Escalation**: Automated Situation Evaluator that tracks observations, computes risk thresholds, and dynamically escalates profiles to critical status.
-- **Automated Recommendations**: Uses LLMs to generate actionable Incident Recommendations based on critical monitoring events.
-- **Human-in-the-Loop Incident Management**: Slack-integrated dashboards for operators to review recommendations, approve them, and manage incidents to resolution.
-- **Immutable Operational Timeline**: A comprehensive audit trail (Timeline Events and Evidence) securely logging every state change, mission outcome, and operator action.
+- **Incident Management**: Track and manage incidents directly from Slack, with state transitions and assignment capabilities.
+- **Operations & Missions**: Organize multiple incidents into broader operations and execute missions via autonomous agents.
+- **Mini-Agents & Orchestration**: A central `SupervisorAgent` orchestrates domain-specific mini-agents (e.g., News, Weather, Inventory) based on real-time needs.
+- **Watchlist Monitoring**: Background jobs continuously monitor news and specific domains (e.g., Global Weather Alerts, Humanitarian Crises).
+- **Recommendation Engine**: Domain-specific recommendations for cybersecurity, environmental, humanitarian, infrastructure, natural disasters, public health, transportation, and weather incidents.
+- **Timeline & Evidence Subsystem**: Keeps a chronological record of events and stores associated evidence.
+- **Slack Integration**: Actionable Slack blocks, interactive modals (`global_update_status`), and slash commands (`/crisispilot-ping`).
+- **Model Context Protocol (MCP)**: Supports tools like `WeatherTool`, `NewsTool`, `MapsTool`, and `InventoryTool` for agents to dynamically fetch context.
 
----
+## Tech Stack
 
-## Architecture Overview
-
-CrisisPilot strictly adheres to a feature-first, domain-driven architecture:
-
-1. **Slack UI / Transport**: A FastAPI + Slack Bolt interface translating chat interactions into domain actions.
-2. **StateManager / Service Layer**: The central orchestration hub (`StateManager`) coordinates cross-domain workflows between independent services (Monitoring, Missions, Operations, Timeline, Evidence).
-3. **Repository / Persistence**: SQLAlchemy 2.0 with aiosqlite, providing deterministic, asynchronous database transactions.
-4. **Mini-Agent Framework**: A scalable architecture allowing small, specialized AI agents to execute specific analytical tasks using LLMs (e.g., Groq) and MCP (Model Context Protocol) tools.
-
----
+- **Backend Framework**: FastAPI (Python >= 3.11)
+- **Slack Integration**: Slack Bolt for Python (`slack-bolt`)
+- **Database**: SQLite (Async) via `aiosqlite` and `sqlalchemy[asyncio]`
+- **AI / LLM Engine**: Groq API (`llama-3.3-70b-versatile` by default), LangGraph, OpenAI SDK
+- **Background Tasks**: `apscheduler`
+- **Validation**: Pydantic & Pydantic Settings
+- **Testing & Quality**: Pytest, Pytest-Asyncio, Pytest-Cov, Ruff, Mypy
 
 ## Project Structure
 
-```text
-SlackAgent/
-├── app/               # FastAPI entrypoints, Slack app bootstrap,runtime lifecycle
-├── core/              # Global configurations, errors, ServiceRegistry, StateManager
-├── features/          # Domain-driven features (Monitoring, Missions, Operations, etc.)
-├── infrastructure/    # Database configuration, external API clients, MCP registry
-├── shared/            # Shared utilities and helpers
-├── docs/              # Comprehensive project documentation (ADRs, Vision, Progress)
-├── tests/             # Pytest suite (unit and E2E integration tests)
-```
+- `app/`: Contains the main FastAPI application entry point (`main.py`) and Slack routing setup (`slack_setup.py`).
+- `core/`: Core abstractions, configuration (`config.py`), notifications, state management (`state.py`), and orchestration (`AgentRegistry`, `SupervisorAgent`).
+- `features/`: The main domain logic. Contains modules for analytics, evidence, incident management, mini-agents, missions, monitoring, operations, recommendations, timeline, watchlists, and workflows.
+- `infrastructure/`: Database connections (`database.py`), LLM provider implementations (`groq_provider.py`), MCP tool definitions, and Slack integration bootstrapping.
+- `storage/`: Local storage directory (holds the SQLite database file).
+- `tests/`: Test suite utilizing `pytest`.
 
----
+## Architecture & Data Flow
 
-## Technology Stack
+1. **Entry Points**: 
+   - HTTP requests are handled by FastAPI (e.g., `/health`).
+   - Slack events, actions, and commands are ingested and routed to specific handlers in the `features/` directory.
+2. **State Management & Database**: 
+   - `StateManager` controls transitions for incidents, missions, operations, and workflows, persisting state to SQLite via SQLAlchemy.
+3. **Agent Orchestration**:
+   - `AgentRegistry` and `SupervisorAgent` use LLM inference to parse incidents, evaluate situations, and dispatch tasks to mini-agents or the `MissionExecutionEngine`.
+4. **Background Jobs**:
+   - `apscheduler` runs recurring tasks like the `NewsMonitorCoordinator`, `SummaryDigestScheduler`, and `MissionSchedulerBackgroundRunner`.
 
-- **Language**: Python 3.11+
-- **Framework**: FastAPI (Async HTTP / Routing)
-- **Database**: SQLAlchemy 2.0 + SQLite (In-Memory/File based Async)
-- **Integration**: Slack Bolt Framework (Socket Mode)
-- **AI / LLM**: Groq Provider (Llama-3 models)
-- **Tooling**: `uv` (Dependency management), `pytest` (Testing), `ruff` / `black` (Code Quality)
+## Database Models
 
----
+The SQLite schema natively tracks:
+- **Incidents** (includes `parent_id`, `assigned_user_id`, `thread_ts`, `operation_id`, `mission_id`)
+- **Operations** (aggregations of incidents/missions)
+- **Missions & Workflows** (execution plans and status tracking)
+- **Recommendations** (includes assignment and completion tracking)
+- **Audit Trails** (logs changes across entities)
+- **Watchlists** (severity thresholds, keywords, associated channels)
+- **Monitoring Profiles** (custom frequency tracking)
 
-## Configuration Reference
+## Environment Variables
 
-Configuration is managed via `.env`. A sample configuration is provided in `.env.example`.
+CrisisPilot is configured via `.env`. Key variables include:
 
 | Variable | Description |
-| -------- | ----------- |
-| `SLACK_BOT_TOKEN` | Slack Bot token (`xoxb-`) |
-| `SLACK_APP_TOKEN` | Slack App token for Socket Mode (`xapp-`) |
-| `GROQ_API_KEY` | API Key for Groq LLM integration |
-| `APP_ENV` | Environment (`development`, `production`, `testing`) |
-| `LOG_LEVEL` | Application logging level (`INFO`, `DEBUG`) |
-| `LLM_GUARDRAILS_ENABLED` | Toggle for LLM request/token usage limits |
+|---|---|
+| `APP_ENV` | Environment mode (default: `development`). |
+| `LOG_LEVEL` | Logging verbosity (default: `INFO`). |
+| `SLACK_BOT_TOKEN` | Slack Bot User OAuth Token. |
+| `SLACK_SIGNING_SECRET` | Slack App Signing Secret. |
+| `SLACK_APP_TOKEN` | Slack App-Level Token (for socket mode). |
+| `GROQ_API_KEY` | API Key for Groq (LLM provider). |
+| `GROQ_MODEL` | The LLM model to use (default: `llama-3.3-70b-versatile`). |
+| `DATABASE_URL` | Async database URL (default: `sqlite+aiosqlite:///./storage/crisispilot.db`). |
+| `NEWS_API_KEY` | API key for fetching news data. |
+| `OPENWEATHER_API_KEY` | API key for weather tools. |
+| `HITL_WORKFLOW_ENABLED` | Toggle Human-in-the-Loop workflows (default: `True`). |
+| `LLM_GUARDRAILS_ENABLED` | Toggle LLM usage guardrails (default: `True`). |
 
----
+## API Endpoints & Commands
 
-## Setup & Installation
+### FastAPI Endpoints
+- `GET /health`: Returns the health status of the application and its subsystems.
 
-CrisisPilot relies on `uv` for lightning-fast dependency resolution.
+### Slack Commands & Actions
+- `/crisispilot-ping`: Verifies the slash command framework is operational.
+- `global_update_status_modal`: Interactive Slack modal triggered by the `global_update_status` action to change states of missions, operations, workflows, and incidents.
 
-1. **Clone the repository**:
+## Installation & Setup
+
+1. **Prerequisites**: Python >= 3.11, UV or pip.
+2. **Clone and Install**:
    ```bash
-   git clone <repository_url>
-   cd SlackAgent
+   # Using standard pip
+   pip install -r requirements.txt
+   
+   # Or using Hatch/uv (as defined in pyproject.toml)
+   pip install -e .
    ```
-2. **Install dependencies**:
+3. **Environment setup**: 
+   Copy `.env.example` to `.env` and fill in the API keys and Slack tokens.
+4. **Database Initialization**: 
+   The database tables and watchlists are automatically seeded upon application startup.
+5. **Run the Application**:
    ```bash
-   uv venv
-   source .venv/bin/activate
-   uv pip install -r requirements.txt
-   uv pip install pytest pytest-asyncio  # For testing
-   ```
-3. **Environment Setup**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your specific API keys
+   python -m app.main
+   # or
+   uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
    ```
 
----
+## Development & Testing
 
-## Slack Sandbox Setup & Demo Instructions
+Tests are written using `pytest`. The `pytest-asyncio` plugin is heavily used for testing asynchronous database and Slack interactions.
 
-To test the application locally within a Slack workspace:
-
-1. Navigate to the [Slack API Apps dashboard](https://api.slack.com/apps).
-2. Click **Create New App** -> **From an app manifest**.
-3. Copy the contents of `docs/slack_manifest.json` and paste it into the Slack console.
-4. Install the App into your Slack Sandbox Workspace.
-5. Generate an App-Level Token (with `connections:write` scope) and a Bot Token.
-6. Configure these in your `.env` file (`SLACK_APP_TOKEN` and `SLACK_BOT_TOKEN`).
-
-*(Placeholder for Demo Video / Architecture Diagram)*
-`![CrisisPilot Demo](placeholder_url)`
-
----
-
-## Running the Application
-
-Execute the FastAPI server with `uvicorn`:
-
+To run tests with coverage reporting:
 ```bash
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+pytest --cov=app --cov=core --cov=features --cov=infrastructure --cov=shared --cov-report=term-missing
 ```
 
----
+Code quality formatting and linting is handled by `ruff` and `mypy`, which can be run via pre-commit hooks.
 
-## Running Tests
-
-CrisisPilot includes a comprehensive suite of deterministic unit and integration tests. No external API keys are required to run tests.
-
-```bash
-uv run pytest
-```
-
----
-
-## Deployment Overview
-
-CrisisPilot is designed to be easily deployable to cloud-native PAAS environments like Railway or Render. Deployment validation and continuous integration pipelines are configured via GitHub Actions (see `.github/workflows/ci.yml`). Detailed deployment steps will be verified in subsequent release readiness milestones.
-
----
-
-## Known Limitations
-
-- **In-Memory/SQLite Focus**: Currently designed around SQLite (`aiosqlite`) for ease of deployment and testing. Scaling to distributed environments will require a transition to PostgreSQL.
-- **LLM Context Limits**: Mission intelligence features rely on Groq/Llama models which have specific context window limits; extremely large evidence payloads may require text truncation.
-
----
-
-## Future Enhancements
-
-- **PostgreSQL Migration**: Upgrading the persistence layer to support multi-node scaling.
-- **Advanced Predictive Analytics**: Integrating historical incident data for preemptive risk flagging.
-- **Multi-Workspace Slack Distribution**: Enabling OAuth 2.0 flows to distribute the app across multiple enterprise Slack organizations simultaneously.
+## Current Limitations
+- Testing coverage and specific configurations for advanced deployments (e.g., Docker/Kubernetes) are not explicitly provided in the core repository context.
+- Database locking may occur under heavy concurrent load as it relies on SQLite (multithreading enabled but still constrained by SQLite concurrency).
