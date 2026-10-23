@@ -73,7 +73,7 @@ CrisisPilot is configured via `.env`. Key variables include:
 | `GROQ_API_KEY` | API Key for Groq (LLM provider). |
 | `GROQ_MODEL` | The LLM model to use (default: `llama-3.3-70b-versatile`). |
 | `DATABASE_URL` | Async database URL (default: `sqlite+aiosqlite:///./storage/crisispilot.db`). |
-| `NEWS_API_KEY` | API key for fetching news data. |
+| `NEWS_API_KEY` | API key for fetching news data.(newsapi.org) |
 | `OPENWEATHER_API_KEY` | API key for weather tools. |
 | `HITL_WORKFLOW_ENABLED` | Toggle Human-in-the-Loop workflows (default: `True`). |
 | `LLM_GUARDRAILS_ENABLED` | Toggle LLM usage guardrails (default: `True`). |
